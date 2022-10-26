@@ -21,35 +21,48 @@ from pycbc.filter import make_frequency_series
 from pycbc.types import TimeSeries, FrequencySeries, zeros
 import scipy.signal as sig
 
-class ArtefactGeneration:
-    """A class containing the artefact generation methods.
+class scattered_light:
+    """A class containing the artefact generation methods for generating
+    scattered light.
+    
+    Scattered light artefacts are generated with the centre of the arch
+    half way through the time series. The 'pad' parameter will extend
+    the time series to be equal in length to the 'data_time_length'.
+    The 'roll' parameter will roll the artefact so the centre of the
+    arch will be at time = 0.
 
     Inputs
     ------
-    start_time : float
-        The desired start time of the artefact time series.
-    data_time_length : float
-        The length of the data in time.
     fringe_frequency : float
         The fringe frequency of the artefact to be generated.
     timeperiod : float
         The time period of the artefact to be generated.
     amplitude : float
-        The amplitude of the artefact to be generated
+        The amplitude of the artefact to be generated.
     phase : float
-        The phase of the artefact to be generated
-    pad : bool
-        Determines whether padding is added to the artefact time series.
-        Default = True
+        The phase of the artefact to be generated.
+    time_of_artefact : float
+        The time of the artefact to be generated.
+        This refers to the time of the centre of the arch for scattered
+          light artefacts.
+    start_time : float
+        The desired start time of the artefact time series.
+    data_time_length : float
+        The length of the data in time.
     sample_rate : float
         The sample rate of the artefact time series.
         Typically the same as that of the data.
         Default = 2048.0
-    psd : pycbc.FrequencySeries
-        The power spectral density to weight the template by when
-        performing the whitening.
-        If no whitening is needed, doesn't need to be provided.
-        Default = None
+    pad : bool
+        Determines whether padding is added to the artefact time series.
+        Default = True
+    time_shift : bool
+        Determines whether the time series is shifted to the artefact time_of.
+        Default = True
+    roll : bool
+        Determines whether the artefact is rolled so the centre of the arch
+          appears at time = 0 in the time series.
+
 
     Outputs
     -------
@@ -57,29 +70,30 @@ class ArtefactGeneration:
 
     """
     def __init__(self,
-                 start_time: float,
-                 data_time_length: Union[float, None],
                  fringe_frequency: float,
                  timeperiod: float,
                  amplitude: float,
                  phase: float,
-                 pad: bool = True,
+                 time_of_artefact: float,
+                 start_time: float,
+                 data_time_length: Union[float, None],
                  sample_rate: float = 2048,
-                 psd: FrequencySeries = None,
+                 pad: bool = True,
+                 time_shift: bool = True,
                  roll: bool = True) -> None:
 
-        self.start_time = start_time
-        self.data_time_length = data_time_length
+        
         self.fringe_frequency = fringe_frequency
         self.timeperiod = timeperiod
         self.amplitude = amplitude
         self.phase = phase
-        self.pad = pad
+        self.time_of_artefact = time_of_artefact
+        self.start_time = start_time
+        self.data_time_length = data_time_length
         self.sample_rate = sample_rate
-        self.psd = psd
+        self.pad = pad
+        self.time_shift = time_shift
         self.roll = roll
-
-        self.fs_temp = None
 
     # Scattered Light Model
 
@@ -154,36 +168,30 @@ class ArtefactGeneration:
 
         """
 
-        self.generate_template_array()
-        self.generate_template_timeseries()
+        if self.time_shift = False:
+            self.generate_template_array()
+            self.generate_template_timeseries()
+            
+        if self.time_shift = True:
+            self.generate_template_array()
+            self.generate_template_timeseries()
+            self.shift_template_in_time()
 
         return self.template_timeseries
 
-    def generate_frequency_template(self) -> FrequencySeries:
-
-        self.fs_temp = make_frequency_series(self.template_timeseries)
-
-        return self.fs_temp
-
-    def whiten_template(self,
-                        psd: FrequencySeries) -> TimeSeries:
-        """Whiten the template using a provided psd.
-
+    def shift_template_in_time(self) -> None:
+        """Shifting the TimeSeries to move the location of the
+        artefact in time.
+        
         Inputs
         ------
-        psd : pycbc.FrequencySeries
-            The power spectral density to whiten the template.
-
+        
         Outputs
-        -------
-        white_template : pycbc.TimeSeries
-            A TimeSeries containing the whitened template.
-
+        -------        
+        
         """
-
-        if self.psd is None:
-            logging.info('Please provide a psd to whiten a template.')
-
-        white_template = (self.fs_temp / psd**0.5).to_timeseries()
-
-        return white_template
+        
+        time_shift = self.time_of_artefact - self.start_time
+        self.template_timeseries = self.template_timeseries.cyclic_time_shift(time_shift)
+        
+        
