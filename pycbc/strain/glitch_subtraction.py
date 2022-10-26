@@ -17,20 +17,9 @@ This module contains functions for subtracting glitches from strain data.
 import logging
 import numpy
 from typing import Union
-
+from pycbc.filter import make_frequency_series
+from pycbc.types import TimeSeries, FrequencySeries, zeros
 import scipy.signal as sig
-
-import pycbc.strain
-from pycbc.events.coinc import cluster_over_time
-from pycbc.filter import highpass, matched_filter, matched_filter_core, sigma, \
-                         resample_to_delta_t, sigmasq, make_frequency_series
-from pycbc.frame import query_and_read_frame, read_frame
-from pycbc.psd import interpolate, inverse_spectrum_truncation
-from pycbc.fft import IFFT
-from pycbc.types.timeseries import TimeSeries, FrequencySeries, zeros
-from pycbc.types import complex_same_precision_as
-from ligotimegps import LIGOTimeGPS
-from pycbc.filter.matchedfilter import _BaseCorrelator
 
 class ArtefactGeneration:
     """A class containing the artefact generation methods.
