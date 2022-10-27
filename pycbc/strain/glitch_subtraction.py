@@ -17,11 +17,38 @@ This module contains functions for subtracting glitches from strain data.
 import logging
 import numpy
 from typing import Union
-from pycbc.filter import make_frequency_series
-from pycbc.types import TimeSeries, FrequencySeries, zeros
+from pycbc.types import TimeSeries, FrequencySeries
+from pycbc.inject import InjectionSet
 import scipy.signal as sig
 
-class scattered_light:
+class SLHDFSubtractionSet():
+    """Manages Scattered Light subtractions.
+    """
+    subtype='SL'
+    required_params = ('ffr', 'T')
+    
+    def apply(self, strain, detector_name):
+        """Subtract artefacts (seen by a particular detector) from a time series.
+        
+        Parameters
+        ----------
+        strain : TimeSeries
+            Time series to subtract artefact from
+        detector_name : string
+            Name of the detector used for subtraction.
+            
+        Returns
+        -------
+        None
+              
+        """
+        
+        
+    
+    
+    
+
+class scattered_light_generator:
     """A class containing the artefact generation methods for generating
     scattered light.
     
@@ -94,8 +121,6 @@ class scattered_light:
         self.pad = pad
         self.time_shift = time_shift
         self.roll = roll
-
-    # Scattered Light Model
 
     def generate_template_array(self,
                                 tukey_length: float = 0.2) -> None:
@@ -182,16 +207,14 @@ class scattered_light:
     def shift_template_in_time(self) -> None:
         """Shifting the TimeSeries to move the location of the
         artefact in time.
-        
+
         Inputs
         ------
-        
+
         Outputs
-        -------        
-        
+        -------
+
         """
-        
+
         time_shift = self.time_of_artefact - self.start_time
         self.template_timeseries = self.template_timeseries.cyclic_time_shift(time_shift)
-        
-        
