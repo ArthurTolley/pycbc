@@ -553,6 +553,11 @@ def insert_strain_option_group(parser, gps_times=True):
     data_reading_group.add_argument("--injection-f-final", type=float,
                       help="Override the f_final field of a CBC XML "
                            "injection file (frequency in Hz)")
+    
+    # Glitch Subtraction options
+    data_reading_group.add_argument("--glitch-subtraction-file", type=str,
+                      help="(optional) Subtraction file containing parameters"
+                           " of glitches to be removed from the strain")
 
     # Gating options
     data_reading_group.add_argument("--gating-file", type=str,

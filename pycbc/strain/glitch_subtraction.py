@@ -324,11 +324,11 @@ class scattered_light_generator:
 
         """
 
-        if self.time_shift = False:
+        if self.time_shift is False:
             self.generate_template_array()
             self.generate_template_timeseries()
             
-        if self.time_shift = True:
+        if self.time_shift is True:
             self.generate_template_array()
             self.generate_template_timeseries()
             self.shift_template_in_time()

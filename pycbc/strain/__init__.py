@@ -9,6 +9,8 @@ from .strain import gate_data, StrainSegments, StrainBuffer
 from .gate import add_gate_option_group, gates_from_cli
 from .gate import apply_gates_to_td, apply_gates_to_fd, psd_gates_from_cli
 
+from .glitch_subtraction import GlitchSubtractionSet
+
 models = {
     CubicSpline.name: CubicSpline,
     PhysicalModel.name: PhysicalModel
