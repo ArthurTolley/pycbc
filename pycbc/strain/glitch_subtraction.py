@@ -14,10 +14,13 @@
 """
 This module contains functions for subtracting glitches from strain data.
 """
+import os
+import copy
+import h5py
 import logging
 import numpy
 from typing import Union
-from pycbc.types import TimeSeries, FrequencySeries
+from pycbc.types import float64, float32, TimeSeries
 import pycbc.io
 import scipy.signal as sig
 
@@ -81,7 +84,7 @@ class GlitchHDFSubtractionSet():
         SL = fp['scattered_light']
         subvals = {param: SL[param] for param in SL_parameters}
 
-        if len(parameters) == 0:
+        if len(SL_parameters) == 0:
             numsub = 1
         else:
             numsub = tuple(subvals.values())[0].size
@@ -127,16 +130,29 @@ class GlitchHDFSubtractionSet():
         subtracted_ids = []
         for ii, sub in enumerate(subtractions):
 
+            logging.info('Subtracting at %s', float(sub['time_of']))
+            
+            # Create the time series object containing the artefact
             signal = self.make_strain_from_sub_object(sub, 1.0/delta_t)
-            signal = resample_to_delta_t(signal, strain.delta_t, method='ldas')
+            
+            # Place it at the right time with the right length
+            length = strain.duration * 1.0/delta_t
+            template_length = len(signal)
+            ts_array = numpy.zeros(int(length))
+            idxstart = length/2 - int(template_length/2.)
+            idxend = idxstart + template_length
+            ts_array[int(idxstart):int(idxend)] = signal
+            signal = TimeSeries(ts_array, delta_t=delta_t, epoch=strain.start_time)
+
+            time_shift = float(sub['time_of']) - strain.start_time
+            signal = signal.cyclic_time_shift(time_shift)
             signal = signal.astype(strain.dtype)
             strain.data -= signal
             subtracted_ids.append(ii)
 
-        strain.data[:] = lalstrain.data.data[:]
 
         subtracted = copy.copy(self)
-        subtracted.table = subtractions[np.array(subtracted_ids).astype(int)]
+        subtracted.table = subtractions[numpy.array(subtracted_ids).astype(int)]
         return subtracted
 
     def make_strain_from_sub_object(self, sub, subtraction_sample_rate):
@@ -158,19 +174,19 @@ class GlitchHDFSubtractionSet():
         """
 
         # Compute the scattered light artefact time series
-        scattered_light_generator(fringe_frequency = sub['fringe_frequency'],
-                                  timeperiod = sub['time_period'],
-                                  amplitude = sub['amplitude'],
-                                  phase = sub['phase'],
-                                  time_of_artefact = sub['time_of'],
-                                  start_time = strain.data.start_time,
-                                  data_time_length = strain.data.duration,
-                                  sample_rate = subtraction_sample_rate,
-                                  pad = True,
-                                  time_shift = True,
-                                  roll = False)
+        generator = scattered_light_generator(fringe_frequency = sub['fringe_frequency'],
+                                              timeperiod = sub['time_period'],
+                                              amplitude = sub['amplitude'],
+                                              phase = sub['phase'],
+                                              time_of_artefact = sub['time_of'],
+                                              start_time = 0,
+                                              data_time_length = None,
+                                              sample_rate = subtraction_sample_rate,
+                                              pad = False,
+                                              time_shift = False,
+                                              roll = False)
         
-        signal = scattered_light_generator.generate_template()
+        signal = generator.generate_template()
 
         return signal
 

@@ -28,7 +28,7 @@ from pycbc.types import required_opts, required_opts_multi_ifo
 from pycbc.types import ensure_one_opt, ensure_one_opt_multi_ifo
 from pycbc.types import copy_opts_for_single_ifo, complex_same_precision_as
 from pycbc.inject import InjectionSet, SGBurstInjectionSet
-from pycbc.glitch_subtraction import GlitchSubtractionSet
+from pycbc.strain.glitch_subtraction import GlitchSubtractionSet
 from pycbc.filter import resample_to_delta_t, lowpass, highpass, make_frequency_series
 from pycbc.filter.zpk import filter_zpk
 from pycbc.waveform.spa_tmplt import spa_distance
