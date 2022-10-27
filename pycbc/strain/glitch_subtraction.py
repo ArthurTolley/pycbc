@@ -18,34 +18,165 @@ import logging
 import numpy
 from typing import Union
 from pycbc.types import TimeSeries, FrequencySeries
-from pycbc.inject import InjectionSet
+import pycbc.io
 import scipy.signal as sig
 
-class SLHDFSubtractionSet():
-    """Manages Scattered Light subtractions.
+class GlitchSubtractionSet(object):
+    """Manages sets of subtractions and subtract them from time series.
+
+    Subtractions are read from  HDF files.
+
+    Parameters
+    ----------
+    sim_file : string
+        Path to an hdf file that contains a GlitchTable.
+    \**kwds :
+        The rest of the keyword arguments are passed to the artefact generation
+        function when generating subtractions.
+
+    Attributes
+    ----------
+    table
     """
-    subtype='SL'
-    required_params = ('ffr', 'T')
+
+    def __init__(self, sim_file, **kwds):
+        ext = os.path.basename(sim_file)
+        self._subhandler = GlitchHDFSubtractionSet(sim_file)
+        self.table = self._subhandler.table
+        self.apply = self._subhandler.apply
+        self.make_strain_from_sub_object = \
+            self._subhandler.make_strain_from_sub_object
+        self.times = self._subhandler.times
+
+    @staticmethod
+    def from_cli(opt):
+        """Return an instance of GlitchSubtractionSet configured as specified
+        on the command line.
+        """
+        if opt.glitch_subtraction_file is None:
+            return None
+
+        kwa = {}
+        return GlitchSubtractionSet(opt.glitch_subtraction_file, **kwa)
+
+
+class GlitchHDFSubtractionSet():
+    """Manages glitch subtractions.
+    """
     
-    def apply(self, strain, detector_name):
-        """Subtract artefacts (seen by a particular detector) from a time series.
+    _tableclass = pycbc.io.FieldArray
+    SL_required_params = ('fringe_frequency', 'time_period',
+                          'amplitude', 'phase', 'time_of')
+    
+    def __init__(self, sim_file, hdf_group=None, **kwds):
         
+        # TODO: This needs to filter the hdf file by detector and provide a warning
+        #  for mismatched frame and channel names.
+        
+        # open the file
+        fp = h5py.File(sim_file, 'r')
+        
+        # Scattered Light specific parameters - to be generalised
+        SL_parameters = ['fringe_frequency', 'time_period', 'amplitude', 'phase', 'time_of']
+        SL = fp['scattered_light']
+        subvals = {param: SL[param] for param in SL_parameters}
+
+        if len(parameters) == 0:
+            numsub = 1
+        else:
+            numsub = tuple(subvals.values())[0].size
+
+        missing = set(self.SL_required_params) - set(subvals.keys())
+        if missing:
+            raise ValueError("required parameter(s) {} not found in the given "
+                             "subtraction file".format(', '.join(missing)))
+
+        # initialize the table
+        self.table = self._tableclass.from_kwargs(**subvals)
+
+    
+    def apply(self, strain, subtraction_sample_rate=None):
+        """Add subtractions to a time series.
+
         Parameters
         ----------
         strain : TimeSeries
-            Time series to subtract artefact from
-        detector_name : string
-            Name of the detector used for subtraction.
-            
+            Time series to subtract artefacts from, of type float32 or float64.
+        subtraction_sample_rate: float, optional
+            The sample rate to generate the artefact before subtraction
+
         Returns
         -------
         None
-              
+
+        Raises
+        ------
+        TypeError
+            For invalid types of `strain`.
         """
+        if strain.dtype not in (float32, float64):
+            raise TypeError("Strain dtype must be float32 or float64, not " \
+                    + str(strain.dtype))
+
+        delta_t = strain.delta_t
+        if subtraction_sample_rate is not None:
+            delta_t = 1.0 / subtraction_sample_rate
+
+        subtractions = self.table
+
+        subtracted_ids = []
+        for ii, sub in enumerate(subtractions):
+
+            signal = self.make_strain_from_sub_object(sub, 1.0/delta_t)
+            signal = resample_to_delta_t(signal, strain.delta_t, method='ldas')
+            signal = signal.astype(strain.dtype)
+            strain.data -= signal
+            subtracted_ids.append(ii)
+
+        strain.data[:] = lalstrain.data.data[:]
+
+        subtracted = copy.copy(self)
+        subtracted.table = subtractions[np.array(subtracted_ids).astype(int)]
+        return subtracted
+
+    def make_strain_from_sub_object(self, sub, subtraction_sample_rate):
+        """Make a h(t) strain time-series from a subtraction object.
+
+        Parameters
+        -----------
+        sub : subtraction object
+            The subtraction object to turn into a strain h(t). Can be any
+            object which has artefact parameters as attributes, such as an
+            element in a ``FieldArray``.
+        delta_t : float
+            Sample rate to make subtraction at.
+
+        Returns
+        --------
+        signal : float
+            h(t) corresponding to the subtraction.
+        """
+
+        # Compute the scattered light artefact time series
+        scattered_light_generator(fringe_frequency = sub['fringe_frequency'],
+                                  timeperiod = sub['time_period'],
+                                  amplitude = sub['amplitude'],
+                                  phase = sub['phase'],
+                                  time_of_artefact = sub['time_of'],
+                                  start_time = strain.data.start_time,
+                                  data_time_length = strain.data.duration,
+                                  sample_rate = subtraction_sample_rate,
+                                  pad = True,
+                                  time_shift = True,
+                                  roll = False)
         
-        
-    
-    
+        signal = scattered_light_generator.generate_template()
+
+        return signal
+
+    def times(self):
+        """Return the times of all subtractions"""
+        return self.table.time_of   
     
 
 class scattered_light_generator:

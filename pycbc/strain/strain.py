@@ -28,7 +28,7 @@ from pycbc.types import required_opts, required_opts_multi_ifo
 from pycbc.types import ensure_one_opt, ensure_one_opt_multi_ifo
 from pycbc.types import copy_opts_for_single_ifo, complex_same_precision_as
 from pycbc.inject import InjectionSet, SGBurstInjectionSet
-from pycbc.glitch_subtraction import scattered_light_subtraction_set
+from pycbc.glitch_subtraction import GlitchSubtractionSet
 from pycbc.filter import resample_to_delta_t, lowpass, highpass, make_frequency_series
 from pycbc.filter.zpk import filter_zpk
 from pycbc.waveform.spa_tmplt import spa_distance
@@ -200,7 +200,7 @@ def from_cli(opt, dyn_range_fac=1, precision='single',
     gating_info = {}
 
     injector = InjectionSet.from_cli(opt)
-    subtractor = SubtractionSet.from_cli(opt)
+    subtractor = GlitchSubtractionSet.from_cli(opt)
 
     if opt.frame_cache or opt.frame_files or opt.frame_type or opt.hdf_store:
         if opt.frame_cache:
@@ -294,10 +294,6 @@ def from_cli(opt, dyn_range_fac=1, precision='single',
         logging.info("Dividing strain by constant")
         l = opt.normalize_strain
         strain = strain / l
-
-    if opt.strain_high_pass:
-        logging.info("Highpass Filtering")
-        strain = highpass(strain, frequency=opt.strain_high_pass)
 
     if opt.sample_rate:
         logging.info("Resampling data")
@@ -419,10 +415,7 @@ def from_cli(opt, dyn_range_fac=1, precision='single',
     if subtractor is not None:
         logging.info("Subtracting artefacts")
         subtractions = \
-            subtractor.apply(strain, opt.channel_name[0:2],
-                           distance_scale=opt.injection_scale_factor,
-                           injection_sample_rate=opt.injection_sample_rate,
-                           inj_filter_rejector=inj_filter_rejector)
+            subtractor.apply(strain)
 
     if injector is not None:
         strain.injections = injections
