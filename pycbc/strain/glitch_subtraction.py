@@ -120,6 +120,9 @@ class GlitchHDFSubtractionSet():
         if strain.dtype not in (float32, float64):
             raise TypeError("Strain dtype must be float32 or float64, not " \
                     + str(strain.dtype))
+            
+        t0 = float(strain.start_time)
+        t1 = float(strain.end_time)
 
         delta_t = strain.delta_t
         if subtraction_sample_rate is not None:
@@ -130,6 +133,11 @@ class GlitchHDFSubtractionSet():
         subtracted_ids = []
         for ii, sub in enumerate(subtractions):
 
+            start_time = float(sub['time_of']) - 0.5 * float(sub['time_period']) - 1
+            end_time = float(sub['time_of']) + 0.5 * float(sub['time_period']) + 1
+            if end_time < t0 or start_time > t1:
+                continue
+            
             logging.info('Subtracting at %s', float(sub['time_of']))
             
             # Create the time series object containing the artefact
@@ -144,6 +152,9 @@ class GlitchHDFSubtractionSet():
             ts_array[int(idxstart):int(idxend)] = signal
             signal = TimeSeries(ts_array, delta_t=delta_t, epoch=strain.start_time)
 
+            
+            # This needs some sort of re-write to get the alignment properly
+            #  need to think about this
             time_shift = float(sub['time_of']) - strain.start_time
             signal = signal.cyclic_time_shift(time_shift)
             signal = signal.astype(strain.dtype)
