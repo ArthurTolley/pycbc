@@ -63,8 +63,7 @@ class GlitchSubtractionSet(object):
 
         kwa = {}
         return GlitchSubtractionSet(opt.glitch_subtraction_file, **kwa)
-
-
+    
 class GlitchHDFSubtractionSet():
     """Manages glitch subtractions.
     
@@ -107,6 +106,7 @@ class GlitchHDFSubtractionSet():
         for glitch in self.glitch_types:
             if glitch in datasets:
                 subvals = {param: datasets[glitch][param] for param in parameters[glitch]}
+                subvals['glitch_type'] = glitch
 
         # initialize the table
         self.table = self._tableclass.from_kwargs(**subvals)
@@ -146,14 +146,15 @@ class GlitchHDFSubtractionSet():
 
         subtracted_ids = []
         for ii, sub in enumerate(subtractions):
-
-            start_time = float(sub['centre_time']) - 0.5 * float(sub['time_period']) - 1
-            end_time = float(sub['centre_time']) + 0.5 * float(sub['time_period']) + 1
-            if end_time < t0 or start_time > t1:
-                continue
             
-            logging.info('Subtracting artefact at %s', float(sub['centre_time']))
+            if sub['glitch_type'] is 'scattered_light':
+                start_time = float(sub['centre_time']) - 0.5 * float(sub['time_period']) - 1
+                end_time = float(sub['centre_time']) + 0.5 * float(sub['time_period']) + 1
+                if end_time < t0 or start_time > t1:
+                    continue
             
+                logging.info('Subtracting scattered light artefact at %s', float(sub['centre_time']))
+                
             # Create the time series object containing the artefact
             signal = self.make_strain_from_sub_object(sub, 1.0/delta_t)
             
@@ -197,19 +198,7 @@ class GlitchHDFSubtractionSet():
             h(t) corresponding to the subtraction.
         """
 
-        # Compute the scattered light artefact time series
-        generator = ScatteredLightGenerator(fringe_frequency = sub['fringe_frequency'],
-                                              timeperiod = sub['time_period'],
-                                              amplitude = sub['amplitude'],
-                                              phase = sub['phase'],
-                                              time_of_artefact = sub['centre_time'],
-                                              start_time = 0,
-                                              data_time_length = None,
-                                              sample_rate = subtraction_sample_rate,
-                                              pad = False,
-                                              time_shift = False,
-                                              roll = False)
-        
+        generator = glitch_generator_dict[sub['glitch_type']](sub, subtraction_sample_rate)
         signal = generator.generate_template()
 
         return signal
@@ -260,16 +249,6 @@ class ScatteredLightGenerator:
         The sample rate of the artefact time series.
         Typically the same as that of the data.
         Default = 2048.0
-    pad : bool
-        Determines whether padding is added to the artefact time series.
-        Default = True
-    time_shift : bool
-        Determines whether the time series is shifted to the artefact time_of.
-        Default = True
-    roll : bool
-        Determines whether the artefact is rolled so the centre of the arch
-          appears at time = 0 in the time series.
-
 
     Outputs
     -------
@@ -277,89 +256,16 @@ class ScatteredLightGenerator:
 
     """
     
-    def __init__(self,
-                 fringe_frequency: float,
-                 timeperiod: float,
-                 amplitude: float,
-                 phase: float,
-                 time_of_artefact: float,
-                 start_time: float,
-                 data_time_length: Union[float, None],
-                 sample_rate: float = 2048,
-                 pad: bool = True,
-                 time_shift: bool = True,
-                 roll: bool = True) -> None:
+    def __init__(self, sub, subtraction_sample_rate) -> None:
 
-        
-        self.fringe_frequency = fringe_frequency
-        self.timeperiod = timeperiod
-        self.amplitude = amplitude
-        self.phase = phase
-        self.time_of_artefact = time_of_artefact
-        self.start_time = start_time
-        self.data_time_length = data_time_length
-        self.sample_rate = sample_rate
-        self.pad = pad
-        self.time_shift = time_shift
-        self.roll = roll   
-
-    def generate_template_array(self,
-                                tukey_length: float = 0.2) -> None:
-        """Generate a numpy array containing the artefact.
-
-        Inputs
-        ------
-        tukey_length : float
-            The tukey window input to the scipy function.
-
-        Outputs
-        -------
-        self.template_array : numpy.array
-            A numpy array object containing the generated artefact.
-
-        """
-
-        t_initial = -self.timeperiod/2.0
-        t_end = self.timeperiod/2.0
-        dt = 1./(self.sample_rate)
-        t = numpy.arange(t_initial, t_end, dt)
-        f_rep = 1./(2.*self.timeperiod)
-
-        self.template_array = self.amplitude * numpy.sin((self.fringe_frequency/f_rep)*numpy.sin(2*numpy.pi*f_rep*t) + self.phase)
-        self.template_array = self.template_array * sig.tukey(len(self.template_array), tukey_length)
-
-    def generate_template_timeseries(self) -> TimeSeries:
-        """Generate a pycbc TimeSeries from a numpy array.
-
-        Inputs
-        ------
-
-        Outputs
-        -------
-        self.template_timeseries : pycbc.TimeSeries
-            A TimeSeries object containing the artefact.
-
-        """
-
-        if self.pad is True:
-            length = self.data_time_length * self.sample_rate
-            template_length = len(self.template_array)
-
-            ts_array = numpy.zeros(int(length))
-            idxstart = length/2 - int(template_length/2.)
-            idxend = idxstart + template_length
-            ts_array[int(idxstart):int(idxend)] = self.template_array
-            if self.roll is True:
-                ts_array = numpy.roll(ts_array, (int(len(ts_array)/2.0)))
-
-            self.template_timeseries = TimeSeries(ts_array,
-                                                  delta_t=1./self.sample_rate,
-                                                  epoch=self.start_time)
-
-        else:
-            self.template_timeseries = TimeSeries(self.template_array,
-                                                  delta_t=1./self.sample_rate,
-                                                  epoch=self.start_time)
+        self.fringe_frequency = sub['fringe_frequency']
+        self.timeperiod = sub['time_period']
+        self.amplitude = sub['amplitude']
+        self.phase = sub['phase']
+        self.time_of_artefact = sub['centre_time']
+        self.start_time = 0
+        self.data_time_length = None
+        self.sample_rate = subtraction_sample_rate
 
     def generate_template(self) -> TimeSeries:
         """Comprehensive method for template generation
@@ -374,28 +280,21 @@ class ScatteredLightGenerator:
 
         """
 
-        if self.time_shift is False:
-            self.generate_template_array()
-            self.generate_template_timeseries()
-            
-        if self.time_shift is True:
-            self.generate_template_array()
-            self.generate_template_timeseries()
-            self.shift_template_in_time()
+        t_initial = -self.timeperiod/2.0
+        t_end = self.timeperiod/2.0
+        dt = 1./(self.sample_rate)
+        t = numpy.arange(t_initial, t_end, dt)
+        f_rep = 1./(2.*self.timeperiod)
+
+        self.template_array = self.amplitude * numpy.sin((self.fringe_frequency/f_rep)*numpy.sin(2*numpy.pi*f_rep*t) + self.phase)
+        self.template_array = self.template_array * sig.tukey(len(self.template_array), 0.2)
+        
+        self.template_timeseries = TimeSeries(self.template_array,
+                                              delta_t=1./self.sample_rate,
+                                              epoch=self.start_time)
 
         return self.template_timeseries
-
-    def shift_template_in_time(self) -> None:
-        """Shifting the TimeSeries to move the location of the
-        artefact in time.
-
-        Inputs
-        ------
-
-        Outputs
-        -------
-
-        """
-
-        time_shift = self.time_of_artefact - self.start_time
-        self.template_timeseries = self.template_timeseries.cyclic_time_shift(time_shift)
+    
+glitch_generator_dict = {
+    'scattered_light': ScatteredLightGenerator,
+}
