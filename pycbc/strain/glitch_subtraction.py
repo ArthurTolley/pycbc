@@ -1,3 +1,5 @@
+# Copyright (C) 2022 Arthur Tolley
+#
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
 # Free Software Foundation; either version 3 of the License, or (at your
@@ -27,7 +29,7 @@ import scipy.signal as sig
 class GlitchSubtractionSet(object):
     """Manages sets of subtractions and subtract them from time series.
 
-    Subtractions are read from  HDF files.
+    Subtractions are read from HDF files.
 
     Parameters
     ----------
@@ -68,7 +70,7 @@ class GlitchHDFSubtractionSet():
     """
     
     _tableclass = pycbc.io.FieldArray
-    SL_required_params = ('fringe_frequency', 'time_period',
+    sl_required_params = ('fringe_frequency', 'time_period',
                           'amplitude', 'phase', 'time_of')
     
     def __init__(self, sim_file, hdf_group=None, **kwds):
@@ -80,18 +82,18 @@ class GlitchHDFSubtractionSet():
         fp = h5py.File(sim_file, 'r')
         
         # Scattered Light specific parameters - to be generalised
-        SL_parameters = ['fringe_frequency', 'time_period', 'amplitude', 'phase', 'time_of']
-        SL = fp['scattered_light']
-        subvals = {param: SL[param] for param in SL_parameters}
+        sl_parameters = ['fringe_frequency', 'time_period', 'amplitude', 'phase', 'centre_time']
+        sl_dataset = fp['scattered_light']
+        subvals = {param: sl[param] for param in sl_parameters}
 
-        if len(SL_parameters) == 0:
+        if len(sl_parameters) == 0:
             numsub = 1
         else:
             numsub = tuple(subvals.values())[0].size
 
-        missing = set(self.SL_required_params) - set(subvals.keys())
+        missing = set(self.sl_required_params) - set(subvals.keys())
         if missing:
-            raise ValueError("required parameter(s) {} not found in the given "
+            raise ValueError("Required parameter(s) {} not found in the given "
                              "subtraction file".format(', '.join(missing)))
 
         # initialize the table
@@ -138,7 +140,7 @@ class GlitchHDFSubtractionSet():
             if end_time < t0 or start_time > t1:
                 continue
             
-            logging.info('Subtracting at %s', float(sub['time_of']))
+            logging.info('Subtracting artefact at %s', float(sub['time_of']))
             
             # Create the time series object containing the artefact
             signal = self.make_strain_from_sub_object(sub, 1.0/delta_t)
@@ -205,11 +207,11 @@ class GlitchHDFSubtractionSet():
         return self.table.time_of   
     
 
-class scattered_light_generator:
+class ScatteredLightGenerator:
     """A class containing the artefact generation methods for generating
-    scattered light.
+    scattered light glitches.
     
-    Scattered light artefacts are generated with the centre of the arch
+    Scattered light glitches are generated with the centre of the arch
     half way through the time series. The 'pad' parameter will extend
     the time series to be equal in length to the 'data_time_length'.
     The 'roll' parameter will roll the artefact so the centre of the
