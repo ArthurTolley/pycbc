@@ -144,23 +144,22 @@ class GlitchHDFSubtractionSet():
             signal = self.make_strain_from_sub_object(sub, 1.0/delta_t)
             
             # Place it at the right time with the right length
-            length = strain.duration * 1.0/delta_t
+            length = strain.duration * (1.0/delta_t)
             template_length = len(signal)
             ts_array = numpy.zeros(int(length))
-            idxstart = length/2 - int(template_length/2.)
-            idxend = idxstart + template_length
+            
+            # Place the artefacts at their correct time
+            artefact_time = float(sub['time_of']) - float(strain.start_time)
+            artefact_start_time = artefact_time - (sub['time_period'] * 0.5)
+            artefact_end_time = artefact_time + (sub['time_period'] * 0.5)
+            idxstart = numpy.round(artefact_start_time * (1.0/delta_t))
+            idxend = numpy.round(artefact_end_time * (1.0/delta_t))
             ts_array[int(idxstart):int(idxend)] = signal
             signal = TimeSeries(ts_array, delta_t=delta_t, epoch=strain.start_time)
 
-            
-            # This needs some sort of re-write to get the alignment properly
-            #  need to think about this
-            time_shift = float(sub['time_of']) - strain.start_time
-            signal = signal.cyclic_time_shift(time_shift)
-            signal = signal.astype(strain.dtype)
+            # Subtract!
             strain.data -= signal
             subtracted_ids.append(ii)
-
 
         subtracted = copy.copy(self)
         subtracted.table = subtractions[numpy.array(subtracted_ids).astype(int)]
