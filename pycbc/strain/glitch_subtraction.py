@@ -67,11 +67,24 @@ class GlitchSubtractionSet(object):
 
 class GlitchHDFSubtractionSet():
     """Manages glitch subtractions.
+    
+    Parameters
+    ----------
+    sim_file : string
+        Path to an hdf file containing subtractions
+    
+    Attributes
+    ----------
+    table
+    required_params : tuple
+        Parameter names that must exist for each glitch class in the
+        subtraction HDF file to create subtractions of that type
+    
     """
     
     _tableclass = pycbc.io.FieldArray
-    sl_required_params = ('fringe_frequency', 'time_period',
-                          'amplitude', 'phase', 'time_of')
+    glitch_types = ['scattered_light']
+    required_params = ()
     
     def __init__(self, sim_file, hdf_group=None, **kwds):
         
@@ -81,20 +94,19 @@ class GlitchHDFSubtractionSet():
         # open the file
         fp = h5py.File(sim_file, 'r')
         
-        # Scattered Light specific parameters - to be generalised
-        sl_parameters = ['fringe_frequency', 'time_period', 'amplitude', 'phase', 'centre_time']
-        sl_dataset = fp['scattered_light']
-        subvals = {param: sl[param] for param in sl_parameters}
-
-        if len(sl_parameters) == 0:
-            numsub = 1
-        else:
-            numsub = tuple(subvals.values())[0].size
-
-        missing = set(self.sl_required_params) - set(subvals.keys())
-        if missing:
-            raise ValueError("Required parameter(s) {} not found in the given "
-                             "subtraction file".format(', '.join(missing)))
+        # Grab all dataset names (glitch types)
+        dataset_names = list(fp.keys())
+        
+        # Grab all datasets
+        datasets = {dataset: fp[dataset] for dataset in dataset_names}
+        
+        # Required parameters for those glitch types
+        parameters = {dataset: self.required_params(dataset) for dataset in dataset_names}
+        
+        # Grab parameter values for each glitch type to subtraction
+        for glitch in self.glitch_types:
+            if glitch in datasets:
+                subvals = {param: datasets[glitch][param] for param in parameters[glitch]}
 
         # initialize the table
         self.table = self._tableclass.from_kwargs(**subvals)
@@ -135,12 +147,12 @@ class GlitchHDFSubtractionSet():
         subtracted_ids = []
         for ii, sub in enumerate(subtractions):
 
-            start_time = float(sub['time_of']) - 0.5 * float(sub['time_period']) - 1
-            end_time = float(sub['time_of']) + 0.5 * float(sub['time_period']) + 1
+            start_time = float(sub['centre_time']) - 0.5 * float(sub['time_period']) - 1
+            end_time = float(sub['centre_time']) + 0.5 * float(sub['time_period']) + 1
             if end_time < t0 or start_time > t1:
                 continue
             
-            logging.info('Subtracting artefact at %s', float(sub['time_of']))
+            logging.info('Subtracting artefact at %s', float(sub['centre_time']))
             
             # Create the time series object containing the artefact
             signal = self.make_strain_from_sub_object(sub, 1.0/delta_t)
@@ -151,7 +163,7 @@ class GlitchHDFSubtractionSet():
             ts_array = numpy.zeros(int(length))
             
             # Place the artefacts at their correct time
-            artefact_time = float(sub['time_of']) - float(strain.start_time)
+            artefact_time = float(sub['centre_time']) - float(strain.start_time)
             artefact_start_time = artefact_time - (sub['time_period'] * 0.5)
             artefact_end_time = artefact_time + (sub['time_period'] * 0.5)
             idxstart = numpy.round(artefact_start_time * (1.0/delta_t))
@@ -186,11 +198,11 @@ class GlitchHDFSubtractionSet():
         """
 
         # Compute the scattered light artefact time series
-        generator = scattered_light_generator(fringe_frequency = sub['fringe_frequency'],
+        generator = ScatteredLightGenerator(fringe_frequency = sub['fringe_frequency'],
                                               timeperiod = sub['time_period'],
                                               amplitude = sub['amplitude'],
                                               phase = sub['phase'],
-                                              time_of_artefact = sub['time_of'],
+                                              time_of_artefact = sub['centre_time'],
                                               start_time = 0,
                                               data_time_length = None,
                                               sample_rate = subtraction_sample_rate,
@@ -204,7 +216,16 @@ class GlitchHDFSubtractionSet():
 
     def times(self):
         """Return the times of all subtractions"""
-        return self.table.time_of   
+        return self.table.centre_time
+    
+    def required_params(self, glitch_type):
+        
+        required_params = {'scattered_light': 
+                           ['fringe_frequency', 'time_period',
+                           'amplitude', 'phase', 'centre_time']}
+
+        return required_params[glitch_type]
+        
     
 
 class ScatteredLightGenerator:
@@ -255,6 +276,7 @@ class ScatteredLightGenerator:
     self objects containing the inputs.
 
     """
+    
     def __init__(self,
                  fringe_frequency: float,
                  timeperiod: float,
@@ -279,7 +301,7 @@ class ScatteredLightGenerator:
         self.sample_rate = sample_rate
         self.pad = pad
         self.time_shift = time_shift
-        self.roll = roll
+        self.roll = roll   
 
     def generate_template_array(self,
                                 tukey_length: float = 0.2) -> None:
