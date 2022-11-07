@@ -243,16 +243,9 @@ class ScatteredLightGenerator:
     scattered light glitches.
     
     Scattered light glitches are generated with the centre of the arch
-    half way through the time series. The 'pad' parameter will extend
-    the time series to be equal in length to the 'data_time_length'.
-    The 'roll' parameter will roll the artefact so the centre of the
-    arch will be at time = 0.
-
-    Inputs
-    ------
-    sub : (?)
-        An object containing the scattered light artefact parameters:
-        
+    half way through the time series.
+    
+    Required scattered light artefact parameters, found in sub:
     fringe_frequency : float
         The fringe frequency of the artefact to be generated.
     timeperiod : float
@@ -266,13 +259,16 @@ class ScatteredLightGenerator:
         This refers to the time of the centre of the arch for scattered
           light artefacts.
 
+    Inputs
+    ------
+    sub : (?)
+        An object containing the scattered light artefact parameters:
     subtraction_sample_rate : float
         The sample rate of the artefact time series.
         Typically the same as that of the data.
 
     Outputs
     -------
-    self objects containing the inputs.
 
     """
     
