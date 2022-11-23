@@ -191,14 +191,9 @@ class GlitchHDFSubtractionSet():
 
                 ts_array[int(idxstart):int(idxend)] = signal
                 signal = TimeSeries(ts_array, delta_t=delta_t, epoch=strain.start_time)
-                logging.info("Max values: %s", str(max(signal)))
-                
-                logging.info("Sum of sub values: %s", str(sum(signal)))
-                logging.info("Sum of strain values: %s", str(sum(strain.data)))
 
             # Subtract!
             strain.data -= signal
-            logging.info("Sum of strain values: %s", str(sum(strain.data)))
             subtracted_ids.append(ii)
 
         subtracted = copy.copy(self)
