@@ -21,7 +21,6 @@ import copy
 import h5py
 import logging
 import numpy
-from typing import Union
 from pycbc.types import float64, float32, TimeSeries
 import pycbc.io
 import scipy.signal as sig
@@ -106,7 +105,7 @@ class GlitchHDFSubtractionSet():
         for glitch in self.glitch_types:
             if glitch in datasets:
                 subvals = {param: datasets[glitch][param] for param in parameters[glitch]}
-                subvals['glitch_type'] = glitch
+                subvals['glitch_type'] = numpy.array([glitch for i in range(len(datasets[glitch]))], dtype=str).reshape((len(datasets[glitch]), 1))
                 
             # Include a warning when the dataset doesn't contain the required parameters
 
@@ -150,12 +149,12 @@ class GlitchHDFSubtractionSet():
         for ii, sub in enumerate(subtractions):
             
             start_time, end_time = self.get_start_end_times(sub)
-            centre_time = (end_time - start_time) + start_time
+            centre_time = (end_time + start_time) * 0.5
 
             if end_time < t0 or start_time > t1:
                 continue
 
-            logging.info('Subtracting %s artefact at %s', sub['glitch_type'], float(centre_time))
+            logging.info('Subtracting %s artefact at %.3f', sub['glitch_type'][0], float(centre_time))
                 
             # Create the time series object containing the artefact
             signal = self.make_strain_from_sub_object(sub, 1.0/delta_t)
@@ -167,7 +166,7 @@ class GlitchHDFSubtractionSet():
             #  at 0 with a length equal to that of the time period of the artefact
             #  We need to move this to the right time, but that isn't passed to the
             #  make strain method. hmm
-            
+
                 # Place it at the right time
                 length = strain.duration * (1.0/delta_t)
                 template_length = len(signal)
@@ -177,13 +176,29 @@ class GlitchHDFSubtractionSet():
                 artefact_time = float(sub['centre_time']) - float(strain.start_time)
                 artefact_start_time = artefact_time - (sub['time_period'] * 0.5)
                 artefact_end_time = artefact_time + (sub['time_period'] * 0.5)
+
+                if float(sub['centre_time']) - (sub['time_period'] * 0.5) < strain.start_time:
+                    artefact_start_time = 0.0
+
+                if float(sub['centre_time']) + (sub['time_period'] * 0.5) > strain.end_time:
+                    artefact_end_time -= float(sub['centre_time']) + float(sub['time_period'] * 0.5) - float(strain.end_time)
+
                 idxstart = numpy.round(artefact_start_time * (1.0/delta_t))
                 idxend = numpy.round(artefact_end_time * (1.0/delta_t))
+
+                if int(idxend - idxstart) != len(signal):
+                    signal.resize(int(idxend - idxstart))
+
                 ts_array[int(idxstart):int(idxend)] = signal
                 signal = TimeSeries(ts_array, delta_t=delta_t, epoch=strain.start_time)
+                logging.info("Max values: %s", str(max(signal)))
+                
+                logging.info("Sum of sub values: %s", str(sum(signal)))
+                logging.info("Sum of strain values: %s", str(sum(strain.data)))
 
             # Subtract!
             strain.data -= signal
+            logging.info("Sum of strain values: %s", str(sum(strain.data)))
             subtracted_ids.append(ii)
 
         subtracted = copy.copy(self)
@@ -208,7 +223,7 @@ class GlitchHDFSubtractionSet():
             h(t) corresponding to the subtraction.
         """
 
-        generator = glitch_generator_dict[sub['glitch_type']](sub, subtraction_sample_rate)
+        generator = glitch_generator_dict[sub['glitch_type'][0]](sub, subtraction_sample_rate)
         signal = generator.generate_template()
 
         return signal
@@ -230,8 +245,8 @@ class GlitchHDFSubtractionSet():
         """Calculate and return the start and end times for each glitch type"""
         
         if sub['glitch_type'] == 'scattered_light':
-            start_time = float(sub['centre_time']) - 0.5 * float(sub['time_period']) - 1
-            end_time = float(sub['centre_time']) + 0.5 * float(sub['time_period']) + 1
+            start_time = float(sub['centre_time']) - 0.5 * float(sub['time_period'])
+            end_time = float(sub['centre_time']) + 0.5 * float(sub['time_period'])
             
         
         return start_time, end_time
@@ -272,7 +287,7 @@ class ScatteredLightGenerator:
 
     """
     
-    def __init__(self, sub, subtraction_sample_rate) -> None:
+    def __init__(self, sub, subtraction_sample_rate):
 
         self.fringe_frequency = sub['fringe_frequency']
         self.timeperiod = sub['time_period']
@@ -281,7 +296,7 @@ class ScatteredLightGenerator:
         self.time_of_artefact = sub['centre_time']
         self.sample_rate = subtraction_sample_rate
 
-    def generate_template(self) -> TimeSeries:
+    def generate_template(self):
         """Comprehensive method for template generation
 
         Inputs
