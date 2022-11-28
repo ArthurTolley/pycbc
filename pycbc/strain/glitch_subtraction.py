@@ -159,6 +159,7 @@ class GlitchHDFSubtractionSet():
 
             # Create the time series object containing the artefact
             signal = self.make_strain_from_sub_object(sub, 1.0/delta_t)
+            signal.epoch = strain.start_time
 
             if sub['glitch_type'] == 'scattered_light':
 
@@ -187,7 +188,7 @@ class GlitchHDFSubtractionSet():
                     idxend = length
                 else:
                     sig_end = length
-        
+
                 # Subtract the relevant slice of signal from the raw strain
                 strain[int(idxstart):int(idxend)] -= signal[int(sig_start):int(sig_end)]
 
