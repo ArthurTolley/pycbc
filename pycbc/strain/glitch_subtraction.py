@@ -159,7 +159,6 @@ class GlitchHDFSubtractionSet():
 
             # Create the time series object containing the artefact
             signal = self.make_strain_from_sub_object(sub, 1.0/delta_t)
-            signal.epoch = strain.start_time
 
             if sub['glitch_type'] == 'scattered_light':
 
@@ -187,9 +186,11 @@ class GlitchHDFSubtractionSet():
                     sig_end = idxend - length
                     idxend = length
                 else:
-                    sig_end = length
+                    sig_end = idxend-idxstart
 
                 # Subtract the relevant slice of signal from the raw strain
+                signal = TimeSeries(signal, delta_t=delta_t, dtype=float32,
+                                    epoch=strain[int(idxstart):int(idxend)].start_time)
                 strain[int(idxstart):int(idxend)] -= signal[int(sig_start):int(sig_end)]
 
             # Append ids to track later
@@ -314,9 +315,9 @@ class ScatteredLightGenerator:
                                               delta_t=1./self.sample_rate,
                                               epoch=0)
 
-        self.template_timeseries  = highpass(self.template_timeseries , 15)
+        self.template_timeseries  = highpass(self.template_timeseries , 15) * sig.tukey(len(self.template_timeseries), 0.2)
 
-        return self.template_timeseries * sig.tukey(len(self.template_array), 0.2)
+        return self.template_timeseries
 
 glitch_generator_dict = {
     'scattered_light': ScatteredLightGenerator,
