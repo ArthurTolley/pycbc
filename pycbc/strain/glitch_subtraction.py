@@ -170,31 +170,34 @@ class GlitchHDFSubtractionSet():
 
                 # Place it at the right time
                 length = strain.duration * (1.0/delta_t)
-                template_length = len(signal)
-                ts_array = numpy.zeros(int(length))
 
                 # Place the artefacts at their correct time
                 artefact_time = float(sub['centre_time']) - float(strain.start_time)
                 artefact_start_time = artefact_time - (sub['time_period'] * 0.5)
                 artefact_end_time = artefact_time + (sub['time_period'] * 0.5)
 
-                if float(sub['centre_time']) - (sub['time_period'] * 0.5) < strain.start_time:
-                    artefact_start_time = 0.0
-
-                if float(sub['centre_time']) + (sub['time_period'] * 0.5) > strain.end_time:
-                    artefact_end_time -= float(sub['centre_time']) + float(sub['time_period'] * 0.5) - float(strain.end_time)
-
                 idxstart = numpy.round(artefact_start_time * (1.0/delta_t))
                 idxend = numpy.round(artefact_end_time * (1.0/delta_t))
 
-                if int(idxend - idxstart) != len(signal):
-                    signal.resize(int(idxend - idxstart))
+                # These if statements control template alignment at the
+                #  beginning and end of data
+                # If part of the glitch is before the start time, ignore it
+                # If part of the glitch is after the end time, ignore it
+                if idxstart < 0:
+                    sig_start = 0 - idxstart
+                    idxstart = 0
+                else:
+                    sig_start = 0
 
-                ts_array[int(idxstart):int(idxend)] = signal
-                signal = TimeSeries(ts_array, delta_t=delta_t, epoch=strain.start_time)
+                if idxend > length:
+                    sig_end = idxend - length
+                    idxend = length
+                else:
+                    sig_end = length
 
-            # Subtract!
-            strain.data -= signal
+                strain[int(idxstart):int(idxend)] -= signal[int(sig_start):int(sig_end)]
+
+            # Append ids to track later
             subtracted_ids.append(ii)
 
         subtracted = copy.copy(self)
