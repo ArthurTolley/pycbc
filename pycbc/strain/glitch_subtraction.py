@@ -151,8 +151,8 @@ class GlitchHDFSubtractionSet():
 
             start_time, end_time = self.get_start_end_times(sub)
             centre_time = (end_time + start_time) * 0.5
-
-            if end_time < t0 or start_time > t1:
+            
+            if start_time < t0 or end_time > t1:
                 continue
 
             logging.info('Subtracting %s artefact at %.3f', sub['glitch_type'][0], float(centre_time))
@@ -172,26 +172,10 @@ class GlitchHDFSubtractionSet():
                 idxstart = numpy.round(artefact_start_time * (1.0/delta_t))
                 idxend = numpy.round(artefact_end_time * (1.0/delta_t))
 
-                # These if statements control template alignment at the
-                #  beginning and end of data
-                # If part of the glitch is before the start time, ignore it
-                # If part of the glitch is after the end time, ignore it
-                if idxstart < 0:
-                    sig_start = 0 - idxstart
-                    idxstart = 0
-                else:
-                    sig_start = 0
-
-                if idxend > length:
-                    sig_end = idxend - length
-                    idxend = length
-                else:
-                    sig_end = idxend-idxstart
-
                 # Subtract the relevant slice of signal from the raw strain
                 signal = TimeSeries(signal, delta_t=delta_t, dtype=float32,
                                     epoch=strain[int(idxstart):int(idxend)].start_time)
-                strain[int(idxstart):int(idxend)] -= signal[int(sig_start):int(sig_end)]
+                strain[int(idxstart):int(idxend)] -= signal[:int(idxend-idxstart)]
 
             # Append ids to track later
             subtracted_ids.append(ii)

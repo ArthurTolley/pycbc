@@ -270,7 +270,7 @@ def from_cli(opt, dyn_range_fac=1, precision='single',
             injector = SGBurstInjectionSet(opt.sgburst_injection_file)
             injector.apply(strain, opt.channel_name[0:2],
                              distance_scale=opt.injection_scale_factor)
-
+                             
         if opt.strain_high_pass:
             logging.info("Highpass Filtering")
             strain = highpass(strain, frequency=opt.strain_high_pass)
@@ -289,6 +289,11 @@ def from_cli(opt, dyn_range_fac=1, precision='single',
             strain = resample_to_delta_t(strain,
                                          1. / opt.sample_rate,
                                          method='ldas')
+                                         
+        if subtractor is not None:
+            logging.info("Subtracting artefacts")
+            subtractions = \
+                subtractor.apply(strain)
 
         if opt.gating_file is not None:
             logging.info("Gating times contained in gating file")
@@ -433,11 +438,6 @@ def from_cli(opt, dyn_range_fac=1, precision='single',
         gate_params = [(strain.start_time, 0., pd_taper_window)]
         gate_params.append((strain.end_time, 0., pd_taper_window))
         gate_data(strain, gate_params)
-        
-    if subtractor is not None:
-        logging.info("Subtracting artefacts")
-        subtractions = \
-            subtractor.apply(strain)
 
     if injector is not None:
         strain.injections = injections
