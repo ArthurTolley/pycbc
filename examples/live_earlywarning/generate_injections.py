@@ -12,29 +12,27 @@ dtype = [('mass1', float), ('mass2', float),
          ('ra', float), ('dec', float),
          ('approximant', 'S32')]
 
-static_params = {'f_lower': 17.,
-                 'f_ref': 17.,
+static_params = {'f_lower': 18.,
+                 'f_ref': 18.,
                  'taper': 'start',
                  'inclination': 0.,
                  'coa_phase': 0.,
                  'polarization': 0.}
 
+# 1 injection
 samples = FieldArray(1, dtype=dtype)
 
-# masses and spins are intended to match the highest
-# and lowest mass templates in the template bank
-# Last injection is designed to be found as an EM-bright single
-samples['mass1'] = [2.9756491]
-samples['mass2'] = [1.1077247]
-samples['spin1z'] = [0.39105825]
-samples['spin2z'] = [0.047548451]
+# 
+samples['mass1'] = [1.5]
+samples['mass2'] = [1.5]
+samples['spin1z'] = [0.]
+samples['spin2z'] = [0.]
 
-# distance and sky locations for coincs to have network SNRs ~15
-# and for single to pass SNR cuts
-samples['tc'] = [1272790100.3]
-samples['distance'] = [47.]
-samples['ra'] = [np.deg2rad(10)]
-samples['dec'] = [np.deg2rad(-45)]
+# 
+samples['tc'] = [1365890089.9]
+samples['distance'] = [14.]
+samples['ra'] = [np.deg2rad(45)]
+samples['dec'] = [np.deg2rad(45)]
 
 samples['approximant'] = ['SpinTaylorT4']
 
