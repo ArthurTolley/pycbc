@@ -38,7 +38,7 @@ then
         --output-prefix template_bank_ \
         --random-sort \
         --random-seed 831486 \
-        --templates-per-bank 50
+        --templates-per-bank 5000
 
     mv template_bank_0.hdf template_bank.hdf
     rm -f template_bank_*.hdf
