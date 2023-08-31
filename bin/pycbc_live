@@ -12,6 +12,7 @@ See https://arxiv.org/abs/1805.11174 for an overview."""
 import sys
 import argparse, numpy, pycbc, logging, cProfile, h5py, lal, json
 import os.path
+import time
 import itertools
 import platform
 import subprocess
@@ -41,7 +42,9 @@ from pycbc.population import live_pastro_utils as livepau
 from pycbc import mchirp_area
 from pycbc.detector import ppdets
 from pycbc.filter import resample
-from pycbc.psd import estimate
+# TODO: Choose the right import options for psd_var
+from pycbc.psd import estimate #, calc_filt_psd_variation_live, find_trigger_value, create_filter
+from pycbc.psd import variation
 
 # Use cached class-based FFTs in the resample and estimate module
 resample.USE_CACHING_FOR_LFILTER = True
@@ -423,7 +426,7 @@ class LiveEventManager(object):
         # reload_buffer time. These args are documented here:
         # https://ligo-gracedb.readthedocs.io/en/latest/api.html#ligo.gracedb.rest.GraceDb
         # Because we do not change any of the request session values when running the
-        # code, it should remain thread safe. 
+        # code, it should remain thread safe.
         gdbargs = {'reload_certificate': True, 'reload_buffer': 300}
         if self.gracedb_server:
             gdbargs['service_url'] = self.gracedb_server
@@ -918,6 +921,10 @@ parser.add_argument('--embright-massgap-max', type=float, default=5.0, metavar='
                     help='Upper limit of the mass gap, used for estimating '
                          'HasMassGap probability.')
 
+# TODO: Remove temp argument
+# TODO: Figure out how to get this through from single_stat instead
+parser.add_argument('--psd-variation', action='store_true')
+
 scheme.insert_processing_option_group(parser)
 LiveSingle.insert_args(parser)
 fft.insert_fft_option_group(parser)
@@ -1069,7 +1076,8 @@ with ctx:
 
     logging.info('Starting')
 
-    if args.enable_profiling is not None and evnt.rank == args.enable_profiling:
+    # TODO: Replace original code for PR
+    if args.enable_profiling is not None:
         pr = cProfile.Profile()
         pr.enable()
 
@@ -1085,6 +1093,10 @@ with ctx:
         results = {}
         evnt.live_detectors = set()
 
+        # PSD Var Objects
+        # TODO: Only do if psd_var is selected
+        psd_recalculated = {ifo: False for ifo in ifos}
+
         for ifo in ifos:
             results[ifo] = False
             status = data_reader[ifo].advance(
@@ -1092,6 +1104,8 @@ with ctx:
                 timeout=args.frame_read_timeout
             )
             if status and psd_count[ifo] == 0:
+                # TODO: Only do if psd_var is selected
+                psd_recalculated[ifo] = False
                 status = data_reader[ifo].recalculate_psd()
                 psd_count[ifo] = args.psd_recompute_length - 1
             elif not status:
@@ -1156,6 +1170,37 @@ with ctx:
                     for key in results[ifo]:
                         if len(results[ifo][key]):
                             results[ifo][key] = results[ifo][key][idx]
+
+
+            # Add in the psd_var to the results
+            # TODO: Perform this step depending on whether the stat includes
+            #       psd_var within the argument.
+            # TODO: PEP8
+            if args.psd_variation:
+
+                logging.info('Setting filters to none')
+                filt = {ifo: None for ifo in ifos}
+
+                for ifo in results:
+                    logging.info(f"Calculating PSD Variation Statistic for {ifo}")
+
+                    if filt[ifo] is None:
+                        filt[ifo] = variation.create_filter(data_reader[ifo].psd,
+                                                            args.psd_segment_length,
+                                                            int(args.sample_rate))
+
+                    psd_var_val = variation.calc_filt_psd_variation_live(data_reader[ifo].strain,
+                                                                         filt[ifo],
+                                                                         args.psd_segment_length)
+
+                    idx = (data_reader[ifo].start_time - results[ifo]['end_time']) * args.sample_rate
+                    psd_var = numpy.zeros(len(results[ifo]['end_time']), dtype=numpy.float32) + psd_var_val
+                    results[ifo]['psd_var_val'] = psd_var
+                    print(ifo, results[ifo]['psd_var_val'][0])
+                    if psd_recalculated[ifo] is False:
+                        logging.info(f'Setting {ifo} filter to none')
+                        filt[ifo] = None
+                        psd_recalculated[ifo] = True
 
             # Look for coincident triggers and do background estimation
             if args.enable_background_estimation:
@@ -1254,5 +1299,9 @@ if evnt.rank == 1:
     if args.fftw_output_double_wisdom_file:
         fft.fftw.export_double_wisdom_to_filename(args.fftw_output_double_wisdom_file)
 
-if args.enable_profiling is not None and evnt.rank == args.enable_profiling:
+# TODO: Replace original code for PR
+if args.enable_profiling is not None:
     pr.dump_stats(f'profiling_rank_{evnt.rank:03d}')
+time.sleep(20)
+
+# See https://github.com/jrfonseca/gprof2dot for profiling (python cProfile)

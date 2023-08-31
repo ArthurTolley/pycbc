@@ -1081,7 +1081,6 @@ class LiveCoincTimeslideBackgroundEstimator(object):
         updated_indices = {}
         for ifo in ifos:
             trigs = results[ifo]
-
             if len(trigs['snr'] > 0):
                 trigsc = copy.copy(trigs)
                 trigsc['chisq'] = trigs['chisq'] * trigs['chisq_dof']

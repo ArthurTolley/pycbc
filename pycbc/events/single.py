@@ -67,6 +67,7 @@ class LiveSingle(object):
                                  'e.g. H1:mean L1:mean V1:conservative')
 
     @classmethod
+    # TODO: Check to see if we need new args for the new ranking stats
     def from_cli(cls, args, ifo):
         sngl_opts_required = all([args.single_fit_file,
                                   args.single_reduced_chisq_threshold,

@@ -9,3 +9,5 @@ build/
 *.pyc
 docs/Makefile
 PyCBC.egg-info
+*.hdf
+*.cpp
