@@ -12,19 +12,17 @@ start = timeit.default_timer()
 # For a single day, just list that single day
 #days = ['2023_06_20']
 #days = ['2023_06_20', '2023_06_21', '2023_06_22', '2023_06_23', '2023_06_24', '2023_06_25', '2023_06_26']
-# days = ['2023_07_31', '2023_08_01', '2023_08_02', '2023_08_03', '2023_08_04', '2023_08_05', '2023_08_06']
-days = ['2023_07_31']
+#days = ['2023_07_31']
+days = ['2023_07_31', '2023_08_01', '2023_08_02', '2023_08_03', '2023_08_04', '2023_08_05', '2023_08_06']
 num_days = str(len(days))
 
 # Directory containing all the PyCBC Live triggers
 triggers_dir = '/home/pycbc.live/analysis/prod/o4/full_bandwidth/cit/triggers/'
-#triggers_dir = '/home/arthur.tolley/PyCBC_changes/live_stat/pycbc/examples/create_denty_bins/test/'
 trigger_files = [os.path.join(triggers_dir, day, trigger_file) for day in days for trigger_file in os.listdir(triggers_dir + day)]
 logging.info(f" {len(trigger_files)} files found")
 
 # Probably combine them by single days first
-#output_file_dir = '/home/arthur.tolley/PyCBC_changes/live_stat/trigger_files/'
-output_file_dir = '/home/arthur.tolley/PyCBC_changes/live_stat/pycbc/examples/create_denty_bins/test/'
+output_file_dir = '/home/arthur.tolley/PyCBC_changes/live_stat/trigger_files/'
 
 # Example file name:
 #  '/home/pycbc.live/analysis/prod/o4/full_bandwidth/cit/triggers/2023_04_17/H1L1-Live-1365767992.069336-8.hdf'
@@ -57,21 +55,15 @@ with h5py.File(output_file, 'a') as destination:
             for ifo in ifos:
                 triggers = source[ifo]
 
-                if len(destination[ifo].keys()) == 0:
-                    for name, dataset in triggers.items():
+                for name, dataset in triggers.items():
+                    if name in destination[ifo]:
+                        if triggers[name].shape[0] == 0:
+                            continue
+                        # Append new data to existing dataset in destination
+                        destination[ifo][name].resize((destination[ifo][name].shape[0] + triggers[name].shape[0]), axis=0)
+                        destination[ifo][name][-triggers[name].shape[0]:] = triggers[name]
+                    else:
                         destination[ifo].create_dataset(name, data=dataset, chunks=True, maxshape=(None,))
-
-                else:
-                    for name in triggers.keys():
-                        if name in destination[ifo]:
-                            if destination[ifo][name].shape[0] == 0:
-                                # Skip resizing or appending if the dataset is empty
-                                continue
-                            if triggers[name].shape[0] == 0:
-                                continue
-                            # Append new data to existing dataset in destination
-                            destination[ifo][name].resize((destination[ifo][name].shape[0] + triggers[name].shape[0]), axis=0)
-                            destination[ifo][name][-triggers[name].shape[0]:] = triggers[name]
 
                 for attr_name, attr_value in source.attrs.items():
                     destination.attrs[attr_name] = attr_value

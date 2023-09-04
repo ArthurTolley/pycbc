@@ -107,13 +107,14 @@ python -m mpi4py `which pycbc_live` \
 --max-batch-size 16777216 \
 --output-path output \
 --day-hour-output-prefix \
---sngl-ranking newsnr_sgveto_psdvar_threshold \
---ranking-statistic phasetd \
+--sngl-ranking newsnr_sgveto \
+--ranking-statistic phasetd_exp_fit_fgbg_bbh_norm \
 --statistic-files \
     statHL.hdf \
     statHV.hdf \
     statLV.hdf \
     statHLV.hdf \
+    L1-multiparam.hdf \
 --sgchisq-snr-threshold 4 \
 --sgchisq-locations "mtotal>40:20-30,20-45,20-60,20-75,20-90,20-105,20-120" \
 --enable-background-estimation \
