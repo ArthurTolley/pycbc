@@ -90,7 +90,7 @@ def combination_noise_rate(rates, slop):
     return numpy.exp(combination_noise_lograte(log_rates, slop))
 
 
-def combination_noise_lograte(log_rates, slop):
+def combination_noise_lograte(log_rates, slop=.003):
     """
     Calculate the expected rate of noise coincidences for a combination of
     detectors given log of single detector noise rates

@@ -976,6 +976,8 @@ class LiveCoincTimeslideBackgroundEstimator(object):
             help="The interval between timeslides in seconds", default=0.1)
         group.add_argument('--ifar-remove-threshold', type=float,
             help="NOT YET IMPLEMENTED", default=100.0)
+        group.add_argument('--coinc-threshold', type=float,
+            help="Additional light travel time threshold.", default=0.002)
 
     @property
     def background_time(self):
@@ -1200,7 +1202,8 @@ class LiveCoincTimeslideBackgroundEstimator(object):
                         sngls_list,
                         slide,
                         self.timeslide_interval,
-                        shift_vec
+                        shift_vec,
+                        args.coinc_threshold
                     )
                 else:
                     c = numpy.array([])
