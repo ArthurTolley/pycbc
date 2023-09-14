@@ -1083,9 +1083,11 @@ class LiveCoincTimeslideBackgroundEstimator(object):
             trigs = results[ifo]
             if len(trigs['snr'] > 0):
                 trigsc = copy.copy(trigs)
+                trigsc['ifo'] = ifo
                 trigsc['chisq'] = trigs['chisq'] * trigs['chisq_dof']
                 trigsc['chisq_dof'] = (trigs['chisq_dof'] + 2) / 2
                 single_stat = self.stat_calculator.single(trigsc)
+                del trigsc['ifo']
             else:
                 single_stat = numpy.array([], ndmin=1,
                               dtype=self.stat_calculator.single_dtype)
@@ -1192,12 +1194,18 @@ class LiveCoincTimeslideBackgroundEstimator(object):
                 # ranking statistic values.
                 sngls_list = [[fixed_ifo, self.trig_stat_memory[:len(i1)]],
                               [shift_ifo, stats[i1]]]
-                c = self.stat_calculator.rank_stat_coinc(
-                    sngls_list,
-                    slide,
-                    self.timeslide_interval,
-                    shift_vec
-                )
+
+                if i1:
+                    c = self.stat_calculator.rank_stat_coinc(
+                        sngls_list,
+                        slide,
+                        self.timeslide_interval,
+                        shift_vec
+                    )
+                else:
+                    c = numpy.array([])
+                
+                print(len(c))
 
                 # Store data about new triggers: slide index, stat value and
                 # times.

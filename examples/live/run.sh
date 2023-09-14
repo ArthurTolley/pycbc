@@ -1,12 +1,6 @@
 #!/bin/bash
 
-# Activate the right environment
-
-conda activate live_rank_stat
-
 # example/test of running PyCBC Live on simulated data
-
-set -e
 
 export OMP_NUM_THREADS=4
 export HDF5_USE_FILE_LOCKING="FALSE"
@@ -19,11 +13,12 @@ gps_epoch_timestamp=315964800
 
 # Convert the current time to seconds since the GPS epoch
 gps_start_time=$(($(date -u -d "$current_time" +"%s") - $gps_epoch_timestamp))
-
-echo "Current UTC Time: $current_time"
-echo "GPS Time: $gps_start_time"
-
 gps_end_time=$((gps_start_time + 512))
+
+echo "GPS Time: $gps_start_time"
+echo "Current UTC Time: $current_time"
+echo "GPS End Time: $gps_end_time"
+
 f_min=17
 
 CONF_DIR=/home/pycbc.live/analysis/prod/o4/full_bandwidth/
@@ -85,20 +80,16 @@ python -m mpi4py `which pycbc_live` \
 --increment-update-cache \
     H1:/dev/shm/kafka/H1_O3ReplayMDC \
     L1:/dev/shm/kafka/L1_O3ReplayMDC \
-    V1:/dev/shm/kafka/V1_O3ReplayMDC \
 --frame-src \
     H1:/dev/shm/kafka/H1_O3ReplayMDC/* \
     L1:/dev/shm/kafka/L1_O3ReplayMDC/* \
-    V1:/dev/shm/kafka/V1_O3ReplayMDC/* \
 --frame-read-timeout 50 \
 --channel-name \
     H1:GDS-CALIB_STRAIN_INJ1_O3Replay \
     L1:GDS-CALIB_STRAIN_INJ1_O3Replay \
-    V1:Hrec_hoft_16384Hz_INJ1_O3Replay \
 --state-channel \
     H1:GDS-CALIB_STATE_VECTOR \
     L1:GDS-CALIB_STATE_VECTOR \
-    V1:DQ_ANALYSIS_STATE_VECTOR \
 --processing-scheme cpu:4 \
 --fftw-measure-level 0 \
 --fftw-input-float-wisdom-file ${CONF_DIR}/cit/fftw_wisdom \
@@ -111,10 +102,8 @@ python -m mpi4py `which pycbc_live` \
 --ranking-statistic phasetd_exp_fit_fgbg_bbh_norm \
 --statistic-files \
     statHL.hdf \
-    statHV.hdf \
-    statLV.hdf \
-    statHLV.hdf \
     L1-multiparam.hdf \
+    H1-multiparam.hdf \
 --sgchisq-snr-threshold 4 \
 --sgchisq-locations "mtotal>40:20-30,20-45,20-60,20-75,20-90,20-105,20-120" \
 --enable-background-estimation \
@@ -123,6 +112,7 @@ python -m mpi4py `which pycbc_live` \
 --pvalue-combination-livetime 0.0005 \
 --ifar-double-followup-threshold 0.0001 \
 --ifar-upload-threshold 0.0002 \
+--coinc-threshold 0.002 \
 --round-start-time 4 \
 --start-time $gps_start_time \
 --end-time $gps_end_time \
@@ -130,11 +120,16 @@ python -m mpi4py `which pycbc_live` \
 --src-class-eff-to-lum-distance 0.74899 \
 --src-class-lum-distance-to-delta -0.51557 -0.32195 \
 --enable-profiling 1 \
---psd-variation \
 --verbose
 
+#--psd-variation \
 #--sngl-ranking newsnr_sgveto_psdvar_threshold \
 #--ranking-statistic phasetd_exp_fit_fgbg_bbh_norm \
+#    statHV.hdf \
+#    statLV.hdf \
+#    statHLV.hdf \
+#    V1:Hrec_hoft_16384Hz_INJ1_O3Replay \
+#    V1:DQ_ANALYSIS_STATE_VECTOR \
 
 gprof2dot -f pstats profiling_rank_000 -o output.dot
 dot -Tpng -o profile_w_var_000.png output.dot

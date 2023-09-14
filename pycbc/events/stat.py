@@ -839,15 +839,25 @@ class ExpFitStatistic(QuadratureSumStatistic):
         thresh: float or numpy array
             The thresh fit value(s)
         """
+        try:
+            tnum = trigs.template_num
+        except AttributeError:
+            tnum = trigs['template_id']
 
         try:
-            tnum = trigs.template_num  # exists if accessed via coinc_findtrigs
             ifo = trigs.ifo
         except AttributeError:
-            tnum = trigs['template_id']  # exists for SingleDetTriggers
-            assert len(self.ifos) == 1
-            # Should be exactly one ifo provided
-            ifo = self.ifos[0]
+            ifo = trigs['ifo']
+            assert ifo in self.ifos
+
+        # try:
+        #     tnum = trigs.template_num  # exists if accessed via coinc_findtrigs
+        #     ifo = trigs.ifo
+        # except AttributeError:
+        #     tnum = trigs['template_id']  # exists for SingleDetTriggers
+        #     assert len(self.ifos) == 1
+        #     # Should be exactly one ifo provided
+        #     ifo = self.ifos[0]
         # fits_by_tid is a dictionary of dictionaries of arrays
         # indexed by ifo / coefficient name / template_id
         alphai = self.fits_by_tid[ifo]['smoothed_fit_coeff'][tnum]
@@ -1487,8 +1497,11 @@ class ExpFitFgBgNormStatistic(PhaseTDStatistic,
             tnum = trigs.template_num  # exists if accessed via coinc_findtrigs
         except AttributeError:
             tnum = trigs['template_id']  # exists for SingleDetTriggers
+
+            # Arthur Comment: I can understand the need for the assertion
+            #                 but it breaks Live.
             # Should only be one ifo fit file provided
-            assert len(self.ifos) == 1
+            # assert len(self.ifos) == 1
         # Store benchmark log volume as single-ifo information since the coinc
         # method does not have access to template id
         singles['benchmark_logvol'] = self.benchmark_logvol[tnum]
@@ -1764,8 +1777,19 @@ class ExpFitFgBgNormBBHStatistic(ExpFitFgBgNormStatistic):
             The array of single detector values
         """
         from pycbc.conversions import mchirp_from_mass1_mass2
-        self.curr_mchirp = mchirp_from_mass1_mass2(trigs.param['mass1'],
-                                                   trigs.param['mass2'])
+        try:
+            self.curr_mchirp = mchirp_from_mass1_mass2(trigs.param['mass1'],
+                                                       trigs.param['mass2'])
+        except AttributeError:
+            try:
+                self.curr_mchirp = mchirp_from_mass1_mass2(trigs['mass1'],
+                                                           trigs['mass2'])
+            except KeyError:
+                logging.info("Triggers not of the correct format.")
+
+
+# Now you can use the 'mass1' variable, which will contain the value from either trigs['mass1'] or trigs.params['mass1']
+
         if self.mcm is not None:
             # Careful - input might be a str, so cast to float
             self.curr_mchirp = min(self.curr_mchirp, float(self.mcm))

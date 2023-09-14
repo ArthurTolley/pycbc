@@ -924,6 +924,9 @@ parser.add_argument('--embright-massgap-max', type=float, default=5.0, metavar='
 # TODO: Remove temp argument
 # TODO: Figure out how to get this through from single_stat instead
 parser.add_argument('--psd-variation', action='store_true')
+parser.add_argument('--coinc-threshold', type=float,
+                    help="The time window allowed between coincident triggers",
+                    default=0.002)
 
 scheme.insert_processing_option_group(parser)
 LiveSingle.insert_args(parser)
