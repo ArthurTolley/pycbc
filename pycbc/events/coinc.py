@@ -864,6 +864,7 @@ class LiveCoincTimeslideBackgroundEstimator(object):
 
         self.timeslide_interval = timeslide_interval
         self.return_background = return_background
+        self.coinc_threshold = coinc_threshold
 
         self.ifos = ifos
         if len(self.ifos) != 2:
@@ -958,6 +959,7 @@ class LiveCoincTimeslideBackgroundEstimator(object):
                    ifar_limit=args.background_ifar_limit,
                    timeslide_interval=args.timeslide_interval,
                    ifos=ifos,
+                   coinc_threshold=args.coinc_threshold
                    **kwargs)
 
     @staticmethod
@@ -1195,13 +1197,13 @@ class LiveCoincTimeslideBackgroundEstimator(object):
                 sngls_list = [[fixed_ifo, self.trig_stat_memory[:len(i1)]],
                               [shift_ifo, stats[i1]]]
 
-                if i1:
+                if any(i1):
                     c = self.stat_calculator.rank_stat_coinc(
                         sngls_list,
                         slide,
                         self.timeslide_interval,
                         shift_vec,
-                        args.coinc_threshold
+                        self.coinc_threshold
                     )
                 else:
                     c = numpy.array([])
