@@ -951,8 +951,6 @@ class LiveCoincTimeslideBackgroundEstimator(object):
 
         kwargs = stat.parse_statistic_keywords_opt(stat_keywords)
 
-        print(args.coinc_threshold)
-
         return cls(num_templates, analysis_chunk,
                    args.ranking_statistic,
                    args.sngl_ranking,
@@ -1205,7 +1203,7 @@ class LiveCoincTimeslideBackgroundEstimator(object):
                         slide,
                         self.timeslide_interval,
                         shift_vec,
-                        self.coinc_threshold
+                        time_addition=self.coinc_threshold
                     )
                 else:
                     c = numpy.array([])

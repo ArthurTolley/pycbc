@@ -1754,6 +1754,11 @@ class ExpFitFgBgNormBBHStatistic(ExpFitFgBgNormStatistic):
                     shift,
                     to_shift
                     )
+        print('logr_s', logr_s)
+        print('len logr_s', len(logr_s))
+        print('')
+        print('curr_mchirp', self.curr_mchirp)
+        print('len curr_mchirp', len(self.curr_mchirp))
         logr_s += numpy.log((self.curr_mchirp / 20.0) ** (11./3.0))
         return logr_s
 
