@@ -1207,8 +1207,6 @@ class LiveCoincTimeslideBackgroundEstimator(object):
                     )
                 else:
                     c = numpy.array([])
-                
-                print(len(c))
 
                 # Store data about new triggers: slide index, stat value and
                 # times.

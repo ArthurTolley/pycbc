@@ -1748,6 +1748,8 @@ class ExpFitFgBgNormBBHStatistic(ExpFitFgBgNormStatistic):
         """
         # Model signal rate as uniform over chirp mass, background rate is
         # proportional to mchirp^(-11/3) due to density of templates
+        print('shift: ', shift)
+        print('len shift: ', len(shift))
         logr_s = ExpFitFgBgNormStatistic.logsignalrate(
                     self,
                     stats,
