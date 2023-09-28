@@ -27,6 +27,7 @@ coincident triggers.
 
 import numpy, logging, pycbc.pnutils, pycbc.conversions, copy, lal
 from pycbc.detector import Detector, ppdets
+from pycbc.conversions import mchirp_from_mass1_mass2
 from .eventmgr_cython import coincbuffer_expireelements
 from .eventmgr_cython import coincbuffer_numgreater
 from .eventmgr_cython import timecoincidence_constructidxs
@@ -1160,6 +1161,9 @@ class LiveCoincTimeslideBackgroundEstimator(object):
                 trig_stat = trigs['stat'][i]
                 trig_time = trigs['end_time'][i]
                 template = trigs['template_id'][i]
+                mass1 = trigs['mass1'][i]
+                mass2 = trigs['mass2'][i]
+                mchirp = mchirp_from_mass1_mass2(mass1, mass2)
 
                 # Get current shift_ifo triggers in the same template
                 times = self.singles[shift_ifo].data(template)['end_time']
@@ -1203,7 +1207,8 @@ class LiveCoincTimeslideBackgroundEstimator(object):
                         slide,
                         self.timeslide_interval,
                         shift_vec,
-                        time_addition=self.coinc_threshold
+                        time_addition=self.coinc_threshold,
+                        mchirp=mchirp
                     )
                 else:
                     c = numpy.array([])

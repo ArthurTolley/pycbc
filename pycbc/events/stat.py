@@ -1580,6 +1580,7 @@ class ExpFitFgBgNormStatistic(PhaseTDStatistic,
 
         # First get signal PDF logr_s
         stat = {ifo: st for ifo, st in s}
+        self.curr_mchirp = kwargs['mchirp']
         logr_s = self.logsignalrate(stat, slide * step, to_shift)
 
         # Find total volume of phase-time-amplitude space occupied by noise
@@ -1748,19 +1749,12 @@ class ExpFitFgBgNormBBHStatistic(ExpFitFgBgNormStatistic):
         """
         # Model signal rate as uniform over chirp mass, background rate is
         # proportional to mchirp^(-11/3) due to density of templates
-        print('shift: ', shift)
-        print('len shift: ', len(shift))
         logr_s = ExpFitFgBgNormStatistic.logsignalrate(
                     self,
                     stats,
                     shift,
                     to_shift
                     )
-        print('logr_s', logr_s)
-        print('len logr_s', len(logr_s))
-        print('')
-        print('curr_mchirp', self.curr_mchirp)
-        print('len curr_mchirp', len(self.curr_mchirp))
         logr_s += numpy.log((self.curr_mchirp / 20.0) ** (11./3.0))
         return logr_s
 
