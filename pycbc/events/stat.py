@@ -1580,7 +1580,12 @@ class ExpFitFgBgNormStatistic(PhaseTDStatistic,
 
         # First get signal PDF logr_s
         stat = {ifo: st for ifo, st in s}
-        self.curr_mchirp = kwargs['mchirp']
+
+        try:
+            self.curr_mchirp = kwargs['mchirp']
+        except KeyError:
+            logging.info("Kwargs doesn't contain mchirp (somehow)")
+
         logr_s = self.logsignalrate(stat, slide * step, to_shift)
 
         # Find total volume of phase-time-amplitude space occupied by noise

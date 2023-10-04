@@ -46,7 +46,7 @@ mpirun \
     -ppn 1 \
     \
 python -m mpi4py `which pycbc_live` \
---bank-file bank_6k.hdf \
+--bank-file bank_3k.hdf \
 --sample-rate 2048 \
 --enable-bank-start-frequency \
 --low-frequency-cutoff ${f_min} \
@@ -99,7 +99,7 @@ python -m mpi4py `which pycbc_live` \
 --output-path output \
 --day-hour-output-prefix \
 --sngl-ranking newsnr_sgveto \
---ranking-statistic phasetd_exp_fit_fgbg_bbh_norm \
+--ranking-statistic phasetd_exp_fit_fgbg_norm \
 --statistic-files \
     statHL.hdf \
     L1-multiparam.hdf \
