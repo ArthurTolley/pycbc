@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--start-date', type=str, required=True,
+parser.add_argument('--start-date', type=str, required=False,
                     help='The first day of triggers you want to collate.'
                          'If no end date is given, the start date is the '
                          'only day.')
@@ -18,17 +18,22 @@ parser.add_argument('--num-days', type=int, required=False,
 parser.add_argument('--end-date', type=str, required=False,
                     help='The final day of triggers to collect. If no end '
                          'is provided then only the start day is used.')
-parser.add_argument('--trigger-dir', type=str, required=True,
+parser.add_argument('--trigger-dir', type=str, required=False,
                     help='The directory containing all of the PyCBC Live '
                          'trigger files. The directory must contain sub-'
                          'directories with naming schemes "YYYY-MM-DD".'
                          'The trigger files must be of the formate: '
                          '"H1L1-Live-GPSTIME-INCREMENT.hdf". Currently '
                          'only H1 and L1 coincidences are supported.')
+parser.add_argument('--trigger-file-list', type=str, required=False,
+                    help='A file containing all the trigger files you '
+                    ' would like to collate.')
 parser.add_argument('--output-dir', type=str, required=True,
                     help='The directory to write the collated trigger file '
                          'to. The file will be named with the following '
                          'format: "H1L1-Live-STARTDAY-NUMDAYS.hdf"')
+parser.add_argument('--output-file', type=str,
+                    help='The name of the output file you want to create.')
 parser.add_argument('--ifos', type=str, required=True, nargs='+',
                     help='The detectors to extract triggers for in the '
                          'trigger files. Currently H1 and L1 supported.')
@@ -38,44 +43,57 @@ logging.basicConfig(level=logging.INFO)
 
 start = timeit.default_timer()
 
-# Convert dates to datetime to get the days array
-start_date = datetime.strptime(args.start_date, '%Y-%m-%d').date()
-
-
-# Find the correct end_date using either end_date or num_days
-if args.end_date and args.num_days:
-    print('Please provide only one of end_date or num_days.')
-elif args.end_date:
-    end_date = datetime.strptime(args.end_date, '%Y-%m-%d').date()
-elif args.num_days:
-    num_days = timedelta(days=args.num_days - 1)
-    end_date = start_date + num_days
+if args.trigger_file_list:
+    print(args.trigger_file_list)
+    trigger_files = numpy.loadtxt(args.trigger_file_list, delimiter=',', dtype=str)
+    
 else:
-    print('Either end_date or num_days must be provided.')
+    # Convert dates to datetime to get the days array
+    start_date = datetime.strptime(args.start_date, '%Y-%m-%d').date()
 
-# Create the days array
-days = []
-delta = timedelta(days=1)
 
-# Loop through the days and add each date to the list
-current_date = start_date
-while current_date <= end_date:
-    days.append(current_date)
-    current_date += delta
+    # Find the correct end_date using either end_date or num_days
+    if args.end_date and args.num_days:
+        print('Please provide only one of end_date or num_days.')
+    elif args.end_date:
+        end_date = datetime.strptime(args.end_date, '%Y-%m-%d').date()
+    elif args.num_days:
+        num_days = timedelta(days=args.num_days - 1)
+        end_date = start_date + num_days
+    else:
+        print('Either end_date or num_days must be provided.')
 
-# Convert to strings in a list
-days = [str(date).replace('-', '_') for date in days]
-num_days = str(len(days))
+    # Create the days array
+    days = []
+    delta = timedelta(days=1)
 
-trigger_files = [
-    os.path.join(args.trigger_dir, day, trigger_file)
-    for day in days
-    for trigger_file in os.listdir(os.path.join(args.trigger_dir, day))
-]
+    # Loop through the days and add each date to the list
+    current_date = start_date
+    while current_date <= end_date:
+        days.append(current_date)
+        current_date += delta
+
+    # Convert to strings in a list
+    days = [str(date).replace('-', '_') for date in days]
+    num_days = str(len(days))
+
+    trigger_files = [
+        os.path.join(args.trigger_dir, day, trigger_file)
+        for day in days
+        for trigger_file in os.listdir(os.path.join(args.trigger_dir, day))
+    ]
+
+
 
 logging.info(f" {len(trigger_files)} files found")
 
-output_file = args.output_dir + 'H1L1-Live-' + days[0] + '-' + num_days + '.hdf'
+if args.output_file:
+    output_file = args.output_dir + args.output_file
+else:
+    ifo_string = "".join(args.ifos)
+    print(ifo_string)
+    output_file = args.output_dir + f'{ifo_string}-Live-' + days[0] + '-' + num_days + '.hdf'
+
 logging.info(f" Creating a file at: {output_file}")
 with h5py.File(output_file, 'a') as destination:
     # Create the ifo groups in the trigger file
@@ -171,20 +189,23 @@ with h5py.File(output_file, 'a') as output:
                 sorted_key = triggers[key][:][sorted_indices]
                 triggers[key][:] = sorted_key
 
-        # Add the region references for sigmasq
-        logging.info(f" Adding region references for {ifo}")
-        sigmasq_dataset = triggers['sigmasq'][:]
+        # Datasets which need region references:
+        region_ref_datasets = ('chisq_dof', 'chisq', 'coa_phase',
+                               'end_time', 'sg_chisq', 'snr',
+                               'template_duration', 'sigmasq')
         start_boundaries = template_boundaries
         end_boundaries = numpy.roll(start_boundaries, -1)
         end_boundaries[-1] = len(template_ids)
 
-        refs = []
+        for dataset in region_ref_datasets:
+            dset = triggers[dataset][:]
+            refs = []
 
-        for i in range(len(template_boundaries)):
-            refs.append(triggers['sigmasq'].regionref[start_boundaries[i]:end_boundaries[i]])
-        triggers.create_dataset\
-            ('sigmasq' + '_template', data=refs,
-                dtype=h5py.special_dtype(ref=h5py.RegionReference))
+            for i in range(len(template_boundaries)):
+                refs.append(triggers[dataset].regionref[start_boundaries[i]:end_boundaries[i]])
+
+            triggers.create_dataset\
+            (dataset + '_template', data=refs, dtype=h5py.special_dtype(ref=h5py.RegionReference))
 
 end = timeit.default_timer()
 total_time = float(end - start)
