@@ -46,7 +46,7 @@ start = timeit.default_timer()
 if args.trigger_file_list:
     print(args.trigger_file_list)
     trigger_files = numpy.loadtxt(args.trigger_file_list, delimiter=',', dtype=str)
-    
+
 else:
     # Convert dates to datetime to get the days array
     start_date = datetime.strptime(args.start_date, '%Y-%m-%d').date()
@@ -108,8 +108,8 @@ with h5py.File(output_file, 'a') as destination:
         if not (trigger_file.endswith('.hdf') and trigger_file.startswith('H1L1-Live')):
             continue
 
-        duration = float(trigger_file.split('-')[2])
-        start_time = float(trigger_file.split('-')[3][:-4])
+        start_time = float(trigger_file.split('-')[2])
+        duration = float(trigger_file.split('-')[3][:-4])
         end_time = start_time + duration
 
         if file_count % 100 == 0:
@@ -118,8 +118,7 @@ with h5py.File(output_file, 'a') as destination:
         with h5py.File(source_file, 'r') as source:
             for ifo in args.ifos:
                 triggers = source[ifo]
-                if 'approximant' in triggers:
-                    if len(triggers['approximant']) == 0:
+                if ('approximant' not in triggers) or (len(triggers['approximant']) == 0):
                         continue
 
                 for name, dataset in triggers.items():
@@ -189,10 +188,18 @@ with h5py.File(output_file, 'a') as output:
                 sorted_key = triggers[key][:][sorted_indices]
                 triggers[key][:] = sorted_key
 
+
+        # Chisq is saved as reduced chisq for live triggers but offline
+        #  code required original chisq. This converts it back.
+        tmpval = triggers['chisq'][:] * (2 * triggers['chisq_dof'][:] - 2)
+        triggers['chisq'][:] = tmpval
+
         # Datasets which need region references:
         region_ref_datasets = ('chisq_dof', 'chisq', 'coa_phase',
                                'end_time', 'sg_chisq', 'snr',
                                'template_duration', 'sigmasq')
+        if 'psd_var_val' in triggers.keys():
+            region_ref_datasets += ('psd_var_val',)
         start_boundaries = template_boundaries
         end_boundaries = numpy.roll(start_boundaries, -1)
         end_boundaries[-1] = len(template_ids)
