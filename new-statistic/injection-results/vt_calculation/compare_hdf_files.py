@@ -32,8 +32,14 @@ cut_keys = ['H1_chisq', 'H1_psd_var_val', 'H1_sg_chisq', 'H1_sigmasq',
              'L1_sigmasq', 'L1_snr', 'ifar_exclusive', 'injection_index',
              'network_snr', 'stat']
 
-print(fits_combined_df.loc[fits_combined_df['injection_index'] == 10583.0][all_kept_keys].T)
-print(old_combined_df.loc[old_combined_df['injection_index'] == 10583.0][all_kept_keys].T)
+# Cut all injections not find with an old_stat IFAR > 1.0
+#  Allows us to find a subsection of injections that have dropped IFAR
+inj_idxs_filter = old_combined_df['injection_index'][old_combined_df['ifar_exclusive'] > 1.0]
+fits_combined_df = fits_combined_df[fits_combined_df['injection_index'].isin(inj_idxs_filter)]
+old_combined_df = old_combined_df[old_combined_df['injection_index'].isin(inj_idxs_filter)]
+
+# print(fits_combined_df.loc[fits_combined_df['injection_index'] == 10583.0][all_kept_keys].T)
+# print(old_combined_df.loc[old_combined_df['injection_index'] == 10583.0][all_kept_keys].T)
 
 kept_keys = ['injection_index', 'H1_snr', 'L1_snr', 'network_snr', 'stat',
              'ifar_exclusive', ]
@@ -59,8 +65,6 @@ joined_worse_df = joined_df[worse_ifar]
 joined_worse_df = joined_worse_df.sort_values(by='ifar_diff', ascending=True)
 joined_better_df = joined_better_df.sort_values(by='ifar_diff', ascending=False)
 
-print(joined_worse_df[:33])
-
 joined_worse_df.sort_values(by='ifar_frac_diff', ascending=True).to_csv('worse_ifar_frac.csv')
 
 print(joined_df.sort_values(by='ifar_frac_diff', ascending=False))
@@ -79,23 +83,23 @@ if True:
                           c=joined_df['ifar_diff'], cmap='cividis', marker='x', s=5, norm=SymLogNorm(linthresh=1))
     plt.colorbar(scatter, label='ifar_diff', format='%.0e')  # Set format to scientific notation
     plt.loglog()
-    plt.savefig('fits_vs_old_colour.png')
+    plt.savefig('fits_vs_old_colour_filtered.png')
     plt.close()
 
-    fig = plt.figure(figsize=(9, 7))
-    plt.xlabel('Old Stat')
-    plt.ylabel('Fits & PSD Var')
-    plt.plot([1e-5, 1e5], [1e-5, 1e5], linestyle=':', color='k')
-    plt.vlines(1, 1e-5, 1e5, linestyle='--', color='r', alpha=0.5)
-    plt.hlines(1, 1e-5, 1e5, linestyle='--', color='r', alpha=0.5)
-    plt.xlim(1e-5, 1e5)
-    plt.ylim(1e-5, 1e5)
-    scatter = plt.scatter(joined_df['ifar_exclusive_O'], joined_df['ifar_exclusive_F'],
-                          c=joined_df['ifar_frac_diff'], cmap='cividis', marker='x', s=5, norm=SymLogNorm(linthresh=1))
-    plt.colorbar(scatter, label='ifar_diff', format='%.0e')  # Set format to scientific notation
-    plt.loglog()
-    plt.savefig('fits_vs_old_colour_frac.png')
-    plt.close()
+    # fig = plt.figure(figsize=(9, 7))
+    # plt.xlabel('Old Stat')
+    # plt.ylabel('Fits & PSD Var')
+    # plt.plot([1e-5, 1e5], [1e-5, 1e5], linestyle=':', color='k')
+    # plt.vlines(1, 1e-5, 1e5, linestyle='--', color='r', alpha=0.5)
+    # plt.hlines(1, 1e-5, 1e5, linestyle='--', color='r', alpha=0.5)
+    # plt.xlim(1e-5, 1e5)
+    # plt.ylim(1e-5, 1e5)
+    # scatter = plt.scatter(joined_df['ifar_exclusive_O'], joined_df['ifar_exclusive_F'],
+    #                       c=joined_df['ifar_frac_diff'], cmap='cividis', marker='x', s=5, norm=SymLogNorm(linthresh=1))
+    # plt.colorbar(scatter, label='ifar_diff', format='%.0e')  # Set format to scientific notation
+    # plt.loglog()
+    # plt.savefig('fits_vs_old_colour_frac.png')
+    # plt.close()
 
 
 
