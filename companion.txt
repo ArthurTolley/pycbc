@@ -6,7 +6,7 @@ healpy
 
 # Needed for GraceDB uploads and skymap generation
 ligo-gracedb>=2.10.0
-ligo.skymap
+ligo.skymap!=1.1.0
 
 # auxiliary samplers
 epsie>=1.0
@@ -14,6 +14,10 @@ cpnest
 pymultinest
 ultranest
 https://github.com/willvousden/ptemcee/archive/master.tar.gz
+# Force the cpu-only version of PyTorch
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+nessai>=0.11.0
 
 # useful to look at PyCBC Live with htop
 setproctitle
