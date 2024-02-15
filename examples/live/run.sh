@@ -2,18 +2,14 @@
 
 # example/test of running PyCBC Live on simulated data
 
-#conda activate ~pycbc.live/.conda/envs/o4-prod-env
-conda activate atol_o4_prod
-cd /home/arthur.tolley/EarlyWarning/pycbc/examples/live/
-
 set -e
 
 export OMP_NUM_THREADS=4
 export HDF5_USE_FILE_LOCKING="FALSE"
 
 gps_start_time=1272790000
-gps_end_time=1272790256
-f_min=17
+gps_end_time=1272790512
+f_min=18
 
 
 # test if there is a template bank. If not, make one
@@ -38,7 +34,7 @@ then
         --output-prefix template_bank_ \
         --random-sort \
         --random-seed 831486 \
-        --templates-per-bank 5000
+        --templates-per-bank 50
 
     mv template_bank_0.hdf template_bank.hdf
     rm -f template_bank_*.hdf
@@ -89,16 +85,16 @@ then
             --output-strain-file $out_path \
             --gps-start-time $gps_start_time \
             --gps-end-time $4 \
-            --sample-rate 2048 \
+            --sample-rate 16384 \
             --low-frequency-cutoff 10 \
             --channel-name $1:SIMULATED_STRAIN \
             --frame-duration 32 \
             --injection-file injections.hdf
     }
     # L1 ends 32s later, so that we can inject in single-detector time
-    simulate_strain H1 aLIGOMidLowSensitivityP1200087 1234 $((gps_end_time - 64))
+    simulate_strain H1 aLIGOMidLowSensitivityP1200087 1234 $((gps_end_time - 32))
     simulate_strain L1 aLIGOMidLowSensitivityP1200087 2345 $gps_end_time
-    simulate_strain V1 AdVEarlyLowSensitivityP1200087 3456 $((gps_end_time - 64))
+    simulate_strain V1 AdVEarlyLowSensitivityP1200087 3456 $((gps_end_time - 32))
 
 else
     echo -e "\\n\\n>> [`date`] Pre-existing strain data found"
@@ -128,6 +124,7 @@ mpirun \
 -host localhost,localhost \
 -n 2 \
 --bind-to none \
+ -x PYTHONPATH -x LD_LIBRARY_PATH -x OMP_NUM_THREADS -x VIRTUAL_ENV -x PATH -x HDF5_USE_FILE_LOCKING \
 \
 python -m mpi4py `which pycbc_live` \
 --bank-file template_bank.hdf \
@@ -174,11 +171,13 @@ python -m mpi4py `which pycbc_live` \
     L1:SIMULATED_STRAIN \
     V1:SIMULATED_STRAIN \
 --processing-scheme cpu:4 \
+--fftw-measure-level 0 \
+--fftw-threads-backend openmp \
 --increment 8 \
 --max-batch-size 16777216 \
 --output-path output \
 --day-hour-output-prefix \
---sngl-ranking newsnr_sgveto \
+--sngl-ranking newsnr_sgveto_psdvar_threshold \
 --ranking-statistic phasetd \
 --statistic-files statHL.hdf statHV.hdf statLV.hdf \
 --sgchisq-snr-threshold 4 \
@@ -196,16 +195,30 @@ python -m mpi4py `which pycbc_live` \
 --src-class-eff-to-lum-distance 0.74899 \
 --src-class-lum-distance-to-delta -0.51557 -0.32195 \
 --run-snr-optimization \
---fftw-measure-level 0 \
---fftw-threads-backend openmp \
+--snr-opt-extra-opts \
+    "--snr-opt-method differential_evolution \
+    --snr-opt-di-maxiter 50 \
+    --snr-opt-di-popsize 100 \
+    --snr-opt-include-candidate " \
+--sngl-ifar-est-dist conservative \
+--single-newsnr-threshold 9 \
+--single-duration-threshold 7 \
+--single-reduced-chisq-threshold 2 \
+--single-fit-file single_trigger_fits.hdf \
+--psd-variation \
 --verbose
 
-# --enable-single-detector-background \
-# --single-newsnr-threshold 9 \
-# --single-duration-threshold 7 \
-# --single-reduced-chisq-threshold 2 \
-# --single-fit-file single_trigger_fits.hdf \
-# --sngl-ifar-est-dist conservative \
+# If you would like to use the pso optimizer, change --optimizer to pso
+#  and include these arguments while removing other optimizer args.
+#  You will need to install the pyswarms package into your environment.
+# --snr-opt-extra-opts \
+#   "--snr-opt-method pso \
+#   --snr-opt-pso-iters 5 \
+#   --snr-opt-pso-particles 250 \
+#   --snr-opt-pso-c1 0.5 \
+#   --snr-opt-pso-c2 2.0 \
+#   --snr-opt-pso-w 0.01 \
+#   --snr-opt-include-candidate " \
 
 # note that, at this point, some SNR optimization processes may still be
 # running, so the checks below may ignore their results
@@ -217,20 +230,20 @@ do
     cat ${opt_snr_log}
 done
 
-# echo -e "\\n\\n>> [`date`] Checking results"
-# ./check_results.py \
-#     --gps-start ${gps_start_time} \
-#     --gps-end ${gps_end_time} \
-#     --f-min ${f_min} \
-#     --bank template_bank.hdf \
-#     --injections injections.hdf \
-#     --detectors H1 L1 V1
+echo -e "\\n\\n>> [`date`] Checking results"
+./check_results.py \
+    --gps-start ${gps_start_time} \
+    --gps-end ${gps_end_time} \
+    --f-min ${f_min} \
+    --bank template_bank.hdf \
+    --injections injections.hdf \
+    --detectors H1 L1 V1
 
-# echo -e "\\n\\n>> [`date`] Running Bayestar"
-# for XMLFIL in `find output -type f -name \*.xml\* | sort`
-# do
-#     pushd `dirname ${XMLFIL}`
-#     bayestar-localize-coincs --f-low ${f_min} `basename ${XMLFIL}` `basename ${XMLFIL}`
-#     test -f 0.fits
-#     popd
-# done
+echo -e "\\n\\n>> [`date`] Running Bayestar"
+for XMLFIL in `find output -type f -name \*.xml\* | sort`
+do
+    pushd `dirname ${XMLFIL}`
+    bayestar-localize-coincs --f-low ${f_min} `basename ${XMLFIL}` `basename ${XMLFIL}`
+    test -f 0.fits
+    popd
+done
