@@ -30,9 +30,11 @@ http://pycbc.org/pycbc/latest/html/workflow.html
 
 import glob
 import os
+import logging
 import numpy as np
 from scipy.stats import rayleigh
 from gwdatafind.utils import filename_metadata
+
 from pycbc import makedir
 from pycbc.workflow.core import \
     File, FileList, configparser_value_to_file, resolve_url_to_file,\
@@ -40,6 +42,8 @@ from pycbc.workflow.core import \
 from pycbc.workflow.jobsetup import select_generic_executable
 from pycbc.workflow.pegasus_workflow import SubWorkflow
 from pycbc.workflow.plotting import PlotExecutable
+
+logger = logging.getLogger('pycbc.workflow.grb_utils')
 
 
 def _select_grb_pp_class(wflow, curr_exe):
@@ -233,8 +237,8 @@ def get_sky_grid_scale(
     return out
 
 
-def setup_pygrb_pp_workflow(wf, pp_dir, seg_dir, segment, insp_files,
-                            inj_files, inj_insp_files, inj_tags):
+def setup_pygrb_pp_workflow(wf, pp_dir, seg_dir, segment, bank_file,
+                            insp_files, inj_files, inj_insp_files, inj_tags):
     """
     Generate post-processing section of PyGRB offline workflow
     """
@@ -258,7 +262,7 @@ def setup_pygrb_pp_workflow(wf, pp_dir, seg_dir, segment, insp_files,
     job_instance = exe_class(wf.cp, "trig_combiner")
     # Create node for coherent no injections jobs
     node, trig_files = job_instance.create_node(wf.ifos, seg_dir, segment,
-                                    insp_files, pp_dir)
+                                    insp_files, pp_dir, bank_file)
     wf.add_node(node)
     pp_outs.append(trig_files)
 
@@ -285,7 +289,7 @@ def setup_pygrb_pp_workflow(wf, pp_dir, seg_dir, segment, insp_files,
                                    if inj_tag in f.tags[1]])
         node, inj_find_file = job_instance.create_node(
                                            tag_inj_files, tag_insp_files,
-                                           pp_dir)
+                                           bank_file, pp_dir)
         wf.add_node(node)
         inj_find_files.append(inj_find_file)
     pp_outs.append(inj_find_files)
@@ -321,7 +325,7 @@ class PycbcGrbTrigCombinerExecutable(Executable):
         self.num_trials = int(cp.get('trig_combiner', 'num-trials'))
 
     def create_node(self, ifo_tag, seg_dir, segment, insp_files,
-                    out_dir, tags=None):
+                    out_dir, bank_file, tags=None):
         node = Node(self)
         node.add_opt('--verbose')
         node.add_opt("--ifo-tag", ifo_tag)
@@ -331,6 +335,7 @@ class PycbcGrbTrigCombinerExecutable(Executable):
         node.add_input_list_opt("--input-files", insp_files)
         node.add_opt("--user-tag", "PYGRB")
         node.add_opt("--num-trials", self.num_trials)
+        node.add_input_opt("--bank-file", bank_file)
         # Prepare output file tag
         user_tag = f"PYGRB_GRB{self.trigger_name}"
         if tags:
@@ -385,13 +390,14 @@ class PycbcGrbInjFinderExecutable(Executable):
     def __init__(self, cp, exe_name):
         super().__init__(cp=cp, name=exe_name)
 
-    def create_node(self, inj_files, inj_insp_files,
+    def create_node(self, inj_files, inj_insp_files, bank_file,
                     out_dir, tags=None):
         if tags is None:
             tags = []
         node = Node(self)
         node.add_input_list_opt('--input-files', inj_insp_files)
         node.add_input_list_opt('--inj-files', inj_files)
+        node.add_input_opt('--bank-file', bank_file)
         ifo_tag, desc, segment = filename_metadata(inj_files[0].name)
         desc = '_'.join(desc.split('_')[:-1])
         out_name = "{}-{}_FOUNDMISSED-{}-{}.h5".format(

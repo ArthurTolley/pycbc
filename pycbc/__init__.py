@@ -79,11 +79,11 @@ def add_common_pycbc_options(parser):
         title="PyCBC common options",
         description="Common options for PyCBC executables.",
     )
-    group.add_argument('-V', '--verbose', action='count', default=0,
+    group.add_argument('-v', '--verbose', action='count', default=0,
                        help='Add verbosity to logging. Adding the option '
                             'multiple times makes logging progressively '
-                            'more verbose, e.g. --verbose or -V provides '
-                            'logging at the info level, but -VV or '
+                            'more verbose, e.g. --verbose or -v provides '
+                            'logging at the info level, but -vv or '
                             '--verbose --verbose provides debug logging.')
 
 def init_logging(verbose=False,
@@ -110,8 +110,8 @@ def init_logging(verbose=False,
             log_level = logging.WARN
         else:
             log_level = logging.DEBUG
-        logging.warn('Got signal %d, setting log level to %d',
-                     signum, log_level)
+        logging.warning('Got signal %d, setting log level to %d',
+                        signum, log_level)
         logger.setLevel(log_level)
 
     signal.signal(signal.SIGUSR1, sig_handler)
