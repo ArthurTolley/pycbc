@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-# Copyright 2020 Gareth S. Davies
+# Copyright 2020 Gareth S. Cabourn Davies
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -30,8 +30,7 @@ from pycbc.events.trigger_fits import cum_fit as eval_cum_fit
 
 
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("--verbose", action="store_true",
-                    help="Print extra debugging information", default=False)
+pycbc.add_common_pycbc_options(parser)
 parser.add_argument("--trigger-fits-file", required=True,
                     help="Trigger fits file to plot")
 default_plot_format = "{ifo}-TRIGGER-FITS.png"

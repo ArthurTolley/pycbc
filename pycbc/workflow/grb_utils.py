@@ -30,9 +30,11 @@ http://pycbc.org/pycbc/latest/html/workflow.html
 
 import glob
 import os
+import logging
 import numpy as np
 from scipy.stats import rayleigh
 from gwdatafind.utils import filename_metadata
+
 from pycbc import makedir
 from pycbc.workflow.core import \
     File, FileList, configparser_value_to_file, resolve_url_to_file,\
@@ -40,6 +42,8 @@ from pycbc.workflow.core import \
 from pycbc.workflow.jobsetup import select_generic_executable
 from pycbc.workflow.pegasus_workflow import SubWorkflow
 from pycbc.workflow.plotting import PlotExecutable
+
+logger = logging.getLogger('pycbc.workflow.grb_utils')
 
 
 def _select_grb_pp_class(wflow, curr_exe):
@@ -65,8 +69,7 @@ def _select_grb_pp_class(wflow, curr_exe):
     exe_to_class_map = {
         'pycbc_grb_trig_combiner': PycbcGrbTrigCombinerExecutable,
         'pycbc_grb_trig_cluster': PycbcGrbTrigClusterExecutable,
-        'pycbc_grb_inj_finder': PycbcGrbInjFinderExecutable,
-        'pycbc_grb_inj_combiner': PycbcGrbInjCombinerExecutable
+        'pycbc_grb_inj_finder': PycbcGrbInjFinderExecutable
     }
     if exe_name not in exe_to_class_map:
         raise ValueError(f"No job class exists for executable {curr_exe}")
@@ -136,12 +139,14 @@ def make_gating_node(workflow, datafind_files, outdir=None, tags=None):
     condition_strain_nodes = []
     condition_strain_outs = FileList([])
     for ifo in workflow.ifos:
-        input_files = FileList([datafind_file for datafind_file in \
+        input_files = FileList([datafind_file for datafind_file in
                                 datafind_files if datafind_file.ifo == ifo])
         condition_strain_jobs = condition_strain_class(cp, "condition_strain",
-                ifos=ifo, out_dir=outdir, tags=tags)
+                                                       ifos=ifo,
+                                                       out_dir=outdir,
+                                                       tags=tags)
         condition_strain_node, condition_strain_out = \
-                condition_strain_jobs.create_node(input_files, tags=tags)
+            condition_strain_jobs.create_node(input_files, tags=tags)
         condition_strain_nodes.append(condition_strain_node)
         condition_strain_outs.extend(FileList([condition_strain_out]))
 
@@ -237,39 +242,49 @@ def setup_pygrb_pp_workflow(wf, pp_dir, seg_dir, segment, bank_file,
                             insp_files, inj_files, inj_insp_files, inj_tags):
     """
     Generate post-processing section of PyGRB offline workflow
-    """
-    pp_outs = FileList([])
-    # pp_outs is returned by this function. It is structured as follows:
-    # pp_outs[0]: [ALL_TIMES, ONSOURCE, OFFSOURCE, OFFTRIAL_1, ..., OFFTRIAL_N]
-    #             FileList (N can be set by the user and is 6 by default)
-    # pp_outs[1]: ALL_TIMES_CLUSTERED File
-    # pp_outs[2]: OFFSOURCE_CLUSTERED File
-    # pp_outs[3]: ONSOURCE_CLUSTERED File
-    # pp_outs[4]: OFFTRIAL_1_CLUSTERED File
-    # ...
-    # pp_outs[4+N]: OFFTRIAL_N_CLUSTERED File
-    # pp_outs[-2]: FOUNDMISSED FileList covering all injection sets
-    # pp_outs[-1]: FOUNDMISSED-FILTERED FileList covering all injection sets
-    #              in the same order as pp_outs[-2]
 
+    Parameters
+    ----------
+    wf : The workflow object
+    pp_dir : The directory where the post-processing files will be stored
+    seg_dir : The directory where the segment files are stored
+    segment : The segment to be analyzed
+    bank_file : The full template bank file
+    insp_files : The list of inspiral files
+    inj_files : The list of injection files
+    inj_insp_files : The list of inspiral files for injections
+    inj_tags : The list of injection tags
+
+    Returns
+    -------
+    trig_files : FileList
+        The list of combined trigger files
+        [ALL_TIMES, ONSOURCE, OFFSOURCE, OFFTRIAL_1, ..., OFFTRIAL_N]
+        FileList (N can be set by the user and is 6 by default)
+    clustered_files : FileList
+        CLUSTERED FileList, same order as trig_files
+        Contains triggers after clustering
+    inj_find_files : FileList
+        FOUNDMISSED FileList covering all injection sets
+    """
     # Begin setting up trig combiner job(s)
     # Select executable class and initialize
     exe_class = _select_grb_pp_class(wf, "trig_combiner")
     job_instance = exe_class(wf.cp, "trig_combiner")
     # Create node for coherent no injections jobs
     node, trig_files = job_instance.create_node(wf.ifos, seg_dir, segment,
-                                    insp_files, pp_dir, bank_file)
+                                                insp_files, pp_dir, bank_file)
     wf.add_node(node)
-    pp_outs.append(trig_files)
 
     # Trig clustering for each trig file
     exe_class = _select_grb_pp_class(wf, "trig_cluster")
     job_instance = exe_class(wf.cp, "trig_cluster")
+    clustered_files = FileList([])
     for trig_file in trig_files:
         # Create and add nodes
         node, out_file = job_instance.create_node(trig_file, pp_dir)
         wf.add_node(node)
-        pp_outs.append(out_file)
+        clustered_files.append(out_file)
 
     # Find injections from triggers
     exe_class = _select_grb_pp_class(wf, "inj_finder")
@@ -288,23 +303,8 @@ def setup_pygrb_pp_workflow(wf, pp_dir, seg_dir, segment, bank_file,
                                            bank_file, pp_dir)
         wf.add_node(node)
         inj_find_files.append(inj_find_file)
-    pp_outs.append(inj_find_files)
 
-    # Combine injections
-    exe_class = _select_grb_pp_class(wf, "inj_combiner")
-    job_instance = exe_class(wf.cp, "inj_combiner")
-    inj_comb_files = FileList([])
-    for in_file in inj_find_files:
-        if 'DETECTION' not in in_file.tags:
-            node, inj_comb_file = job_instance.create_node(in_file,
-                                                           pp_dir,
-                                                           in_file.tags,
-                                                           segment)
-            wf.add_node(node)
-            inj_comb_files.append(inj_comb_file)
-    pp_outs.append(inj_comb_files)
-
-    return pp_outs
+    return trig_files, clustered_files, inj_find_files
 
 
 class PycbcGrbTrigCombinerExecutable(Executable):
@@ -338,7 +338,7 @@ class PycbcGrbTrigCombinerExecutable(Executable):
             user_tag += "_{}".format(tags)
         # Add on/off source and off trial outputs
         output_files = FileList([])
-        outfile_types = ['ALL_TIMES', 'OFFSOURCE', 'ONSOURCE']
+        outfile_types = ['ALL_TIMES', 'ONSOURCE', 'OFFSOURCE']
         for i in range(self.num_trials):
             outfile_types.append("OFFTRIAL_{}".format(i+1))
         for out_type in outfile_types:
@@ -404,26 +404,6 @@ class PycbcGrbInjFinderExecutable(Executable):
         return node, out_file
 
 
-class PycbcGrbInjCombinerExecutable(Executable):
-    """The class responsible for creating jobs ``pycbc_grb_inj_combiner``
-    """
-    current_retention_level = Executable.ALL_TRIGGERS
-
-    def __init__(self, cp, exe_name):
-        super().__init__(cp=cp, name=exe_name)
-
-    def create_node(self, input_file, out_dir, ifo_tag, segment, tags=None):
-        if tags is None:
-            tags = []
-        node = Node(self)
-        node.add_input_opt('--input-files', input_file)
-        out_name = input_file.name.replace('.h5', '-FILTERED.h5')
-        out_file = File(ifo_tag, 'inj_combiner', segment,
-                        os.path.join(out_dir, out_name), tags=tags)
-        node.add_output_opt('--output-file', out_file)
-        return node, out_file
-
-
 def build_veto_filelist(workflow):
     """Construct a FileList instance containing all veto xml files"""
 
@@ -448,7 +428,9 @@ def build_segment_filelist(workflow):
 
 
 def make_pygrb_plot(workflow, exec_name, out_dir,
-                    ifo=None, inj_file=None, trig_file=None, tags=None):
+                    ifo=None, inj_file=None, trig_file=None,
+                    onsource_file=None, bank_file=None,
+                    seg_files=None, tags=None):
     """Adds a node for a plot of PyGRB results to the workflow"""
 
     tags = [] if tags is None else tags
@@ -478,23 +460,12 @@ def make_pygrb_plot(workflow, exec_name, out_dir,
     if workflow.cp.has_option('workflow', 'veto-files'):
         veto_files = build_veto_filelist(workflow)
         node.add_input_list_opt('--veto-files', veto_files)
-    # TODO: check this for pygrb_efficiency and pygrb_plot_stats_distribution
+    # TODO: check this for pygrb_plot_stats_distribution
     # They originally wanted seg_files
-    if exec_name in ['pygrb_plot_injs_results', 'pygrb_efficiency',
-                     'pygrb_plot_snr_timeseries',
-                     'pygrb_plot_stats_distribution']:
+    if exec_name in ['pygrb_plot_injs_results',
+                     'pygrb_plot_snr_timeseries']:
         trig_time = workflow.cp.get('workflow', 'trigger-time')
         node.add_opt('--trigger-time', trig_time)
-    # Other shared tuning values
-    if exec_name not in ['pygrb_plot_skygrid', 'pygrb_plot_coh_ifosnr']:
-        if not (exec_name == 'pygrb_plot_snr_timeseries' and
-                tags[0] != 'reweighted'):
-            for opt in ['chisq-index', 'chisq-nhigh', 'null-snr-threshold',
-                        'snr-threshold', 'newsnr-threshold',
-                        'sngl-snr-threshold', 'null-grad-thresh',
-                        'null-grad-val']:
-                if workflow.cp.has_option('workflow', opt):
-                    node.add_opt('--'+opt, workflow.cp.get('workflow', opt))
     # Pass the injection file as an input File instance
     if inj_file is not None and exec_name not in \
             ['pygrb_plot_skygrid', 'pygrb_plot_stats_distribution']:
@@ -507,19 +478,21 @@ def make_pygrb_plot(workflow, exec_name, out_dir,
     # if exec_name in ['pygrb_plot_injs_results', 'pygrb_efficiency']:
     #     missed_file = inj_file
     #     node.add_input_opt('--missed-file', missed_file)
-    # FIXME: need found-missed-file option
     # Output files and final input file (passed as a File instance)
     if exec_name == 'pygrb_efficiency':
         # In this case tags[0] is the offtrial number
-        onsource_file = configparser_value_to_file(workflow.cp,
-                                                   'workflow', 'onsource-file')
-        node.add_input_opt('--onsource-file', onsource_file)
+        seg_filelist = FileList([resolve_url_to_file(sf) for sf in seg_files])
+        node.add_input_list_opt('--seg-files', seg_filelist)
+        node.add_input_opt('--onsource-file',
+                           resolve_url_to_file(onsource_file))
+        node.add_input_opt('--bank-file', resolve_url_to_file(bank_file))
         node.new_output_file_opt(workflow.analysis_time, '.png',
                                  '--background-output-file',
                                  tags=extra_tags+['max_background'])
         node.new_output_file_opt(workflow.analysis_time, '.png',
                                  '--onsource-output-file',
                                  tags=extra_tags+['onsource'])
+        node.add_opt('--injection-set-name', tags[1])
     else:
         node.new_output_file_opt(workflow.analysis_time, '.png',
                                  '--output-file', tags=extra_tags)
@@ -559,7 +532,7 @@ def make_info_table(workflow, out_dir, tags=None):
 
     tags = [] if tags is None else tags
 
-    # Exectuable
+    # Executable
     exec_name = 'pygrb_grb_info_table'
 
     # Initialize job node
@@ -590,7 +563,7 @@ def make_pygrb_injs_tables(workflow, out_dir,  # exclude=None, require=None,
 
     tags = [] if tags is None else tags
 
-    # Exectuable
+    # Executable
     exec_name = 'pygrb_page_tables'
     # Initialize job node
     grb_name = workflow.cp.get('workflow', 'trigger-name')
@@ -636,7 +609,8 @@ def make_pygrb_injs_tables(workflow, out_dir,  # exclude=None, require=None,
         onsource_file = configparser_value_to_file(workflow.cp,
                                                    'workflow', 'onsource-file')
         node.add_input_opt('--onsource-file', onsource_file)
-        # Loudest offsource triggers and onsource trigger html and h5 output
+        # Loudest offsource triggers and onsource trigger html and h5
+        # output files
         for src_type in ['onsource-trig', 'offsource-trigs']:
             src_type_tags = [src_type.upper().replace('-', '_')]
             node.new_output_file_opt(workflow.analysis_time, '.html',
@@ -672,6 +646,15 @@ def setup_pygrb_minifollowups(workflow, followups_file,
         Tags to add to the minifollowups executables
     """
 
+    logging.info('Entering minifollowups module')
+
+    if not workflow.cp.has_section('workflow-minifollowups'):
+        msg = 'There is no [workflow-minifollowups] section in '
+        msg += 'the configuration file'
+        logging.info(msg)
+        logging.info('Leaving minifollowups')
+        return
+
     tags = [] if tags is None else tags
     # _workflow.makedir(dax_output)
     makedir(dax_output)
@@ -679,7 +662,7 @@ def setup_pygrb_minifollowups(workflow, followups_file,
     # Turn the config file into a File instance
     # curr_ifo = single_trig_file.ifo
     # config_path = os.path.abspath(dax_output + '/' + curr_ifo + \
-    config_path = os.path.abspath(dax_output + '/' + \
+    config_path = os.path.abspath(dax_output + '/' +
                                   '_'.join(tags) + '_minifollowup.ini')
     workflow.cp.write(open(config_path, 'w'))
     config_file = resolve_url_to_file(config_path)
@@ -727,10 +710,11 @@ def setup_pygrb_minifollowups(workflow, followups_file,
                                    staging_site=workflow.staging_site,
                                    cache_file=workflow.cache_file)
     job.add_into_workflow(workflow)
+    logging.info('Leaving minifollowups module')
 
 
-def setup_pygrb_results_workflow(workflow, res_dir, trig_file,
-                                 inj_files, tags=None,
+def setup_pygrb_results_workflow(workflow, res_dir, trig_files,
+                                 inj_files, bank_file, seg_dir, tags=None,
                                  explicit_dependencies=None):
     """Create subworkflow to produce plots, tables,
     and results webpage for a PyGRB analysis.
@@ -741,11 +725,12 @@ def setup_pygrb_results_workflow(workflow, res_dir, trig_file,
         The core workflow instance we are populating
     res_dir: The post-processing directory where
         results (plots, etc.) will be stored
-    trig_file: The triggers File object
+    trig_files: FileList of trigger files
     inj_files: FileList of injection results
+    bank_file: The template bank File object
     tags: {None, optional}
         Tags to add to the executables
-    excplicit_dependencies: nodes that must precede this
+    explicit_dependencies: nodes that must precede this
     """
 
     tags = [] if tags is None else tags
@@ -765,12 +750,14 @@ def setup_pygrb_results_workflow(workflow, res_dir, trig_file,
                      tags=tags)
     node = exe.create_node()
     # Grab and pass all necessary files
-    node.add_input_opt('--trig-file', trig_file)
+    node.add_input_list_opt('--trig-files', trig_files)
     if workflow.cp.has_option('workflow', 'veto-files'):
         veto_files = build_veto_filelist(workflow)
         node.add_input_list_opt('--veto-files', veto_files)
     # node.add_input_opt('--config-files', config_file)
     node.add_input_list_opt('--inj-files', inj_files)
+    node.add_input_opt('--bank-file', bank_file)
+    node.add_opt('--segment-dir', seg_dir)
 
     if tags:
         node.add_list_opt('--tags', tags)
@@ -790,7 +777,7 @@ def setup_pygrb_results_workflow(workflow, res_dir, trig_file,
     node.add_opt('--dax-file-directory', '.')
 
     # Turn the config file into a File instance
-    config_path = os.path.abspath(dax_output + '/' + \
+    config_path = os.path.abspath(dax_output + '/' +
                                   '_'.join(tags) + 'webpage.ini')
     workflow.cp.write(open(config_path, 'w'))
     config_file = resolve_url_to_file(config_path)
@@ -801,7 +788,7 @@ def setup_pygrb_results_workflow(workflow, res_dir, trig_file,
                     file_url=os.path.join(dax_output, name+'.ini'))
     node.add_output(out_file)
 
-    # Add node to the workflow workflow
+    # Add node to the workflow
     workflow += node
     if explicit_dependencies is not None:
         for dep in explicit_dependencies:
